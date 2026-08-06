@@ -27,6 +27,30 @@ function getBaseUrl(req: FastifyRequest): string {
   return `${proto}://${host}`;
 }
 
+const SUPABASE_ENABLED = !!(env.SUPABASE_URL && env.SUPABASE_SERVICE_ROLE_KEY);
+
+async function uploadToSupabase(buffer: Buffer, filename: string, contentType: string, folder: string): Promise<string> {
+  const objectPath = `${folder}/${filename}`;
+  const res = await fetch(
+    `${env.SUPABASE_URL}/storage/v1/object/${env.SUPABASE_STORAGE_BUCKET}/${objectPath}`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+        apikey: env.SUPABASE_SERVICE_ROLE_KEY as string,
+        'Content-Type': contentType,
+        'x-upsert': 'true',
+      },
+      body: buffer,
+    }
+  );
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Supabase upload failed: ${res.status} ${text}`);
+  }
+  return `${env.SUPABASE_URL}/storage/v1/object/public/${env.SUPABASE_STORAGE_BUCKET}/${objectPath}`;
+}
+
 export async function uploadRoutes(app: FastifyInstance) {
   app.post('/video', { preHandler: authenticate }, async (req, reply) => {
     const data = await req.file();
@@ -45,6 +69,13 @@ export async function uploadRoutes(app: FastifyInstance) {
     const buffer = await data.toBuffer();
     if (buffer.length > MAX_VIDEO_BYTES) {
       return reply.status(400).send({ error: `Vidéo trop volumineuse (max ${env.UPLOAD_MAX_SIZE_MB}MB)` });
+    }
+
+    if (SUPABASE_ENABLED) {
+      const ext = path.extname(data.filename || 'video.mp4') || '.mp4';
+      const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`;
+      const url = await uploadToSupabase(buffer, filename, data.mimetype || 'video/mp4', 'videos');
+      return reply.send({ url });
     }
 
     if (!env.CLOUDINARY_CLOUD_NAME) {
@@ -89,6 +120,13 @@ export async function uploadRoutes(app: FastifyInstance) {
     const buffer = await data.toBuffer();
     if (buffer.length > MAX_IMAGE_BYTES) {
       return reply.status(400).send({ error: 'Image trop volumineuse (max 10MB)' });
+    }
+
+    if (SUPABASE_ENABLED) {
+      const ext = path.extname(data.filename || 'image.jpg') || '.jpg';
+      const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`;
+      const url = await uploadToSupabase(buffer, filename, data.mimetype || 'image/jpeg', 'images');
+      return reply.send({ url });
     }
 
     if (!env.CLOUDINARY_CLOUD_NAME) {
