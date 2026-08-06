@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createThumbnail } from 'react-native-create-thumbnail';
 import {
   View, Text, StyleSheet, Image, TouchableOpacity,
-  FlatList, ScrollView, Alert, ActivityIndicator, RefreshControl, Modal, ActionSheetIOS, Platform,
+  FlatList, ScrollView, Alert, ActivityIndicator, RefreshControl, Modal, ActionSheetIOS, Platform, StatusBar,
 } from 'react-native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigation } from '@react-navigation/native';
@@ -214,6 +214,7 @@ export default function ProfileScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.bg }]}>
+      <StatusBar barStyle={theme.isDark ? 'light-content' : 'dark-content'} backgroundColor={theme.surface} translucent={false} />
       <Modal visible={editVisible} animationType="slide" presentationStyle="pageSheet">
         <EditProfileScreen onClose={() => { setEditVisible(false); qc.invalidateQueries({ queryKey: ['me'] }); }} />
       </Modal>
@@ -479,7 +480,7 @@ export default function ProfileScreen() {
             renderItem={({ item }) => item.__draftCell ? (
               <DraftCell
                 count={draftCount}
-                onPress={() => navigation.navigate('VideoPlayer', { postId: '', userId: user?.id, draftsOnly: true })}
+                onPress={() => navigation.navigate('DraftsList')}
               />
             ) : (
               <GridItem item={item} onPress={() => navigation.navigate('VideoPlayer', { postId: item.id, userId: user?.id })} />

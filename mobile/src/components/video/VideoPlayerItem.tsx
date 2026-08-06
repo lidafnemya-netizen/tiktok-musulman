@@ -47,7 +47,10 @@ export interface FeedPost {
     id: string; title: string; artist: string | null; url?: string;
     origin_user?: { id: string; username: string; avatar_url: string | null } | null;
   } | null;
-  reposted_by?: { id: string; username: string; avatar_url: string | null } | null;
+  reposted_by?: {
+    count: number;
+    recent: { id: string; username: string; avatar_url: string | null }[];
+  } | null;
 }
 
 interface Props {
@@ -298,6 +301,13 @@ export function VideoPlayerItem({ post, isVisible, onComment, onNotInterested, i
     mutationFn: () => api.post(`/users/${post.user.id}/follow`),
     onMutate: () => setFollowing(f => !f),
     onError: () => setFollowing(post.user.is_following ?? false),
+  });
+
+  const [justReposted, setJustReposted] = useState(false);
+  const repostMutation = useMutation({
+    mutationFn: () => api.post(`/posts/${post.id}/repost`),
+    onMutate: () => setJustReposted(true),
+    onError: () => setJustReposted(false),
   });
 
   // ── Heart animation (always plays on double-tap) — TikTok style ──────────
@@ -611,17 +621,44 @@ export function VideoPlayerItem({ post, isVisible, onComment, onNotInterested, i
       />
 
       {/* Repost indicator — bottom left, above username */}
-      {post.reposted_by && (
-        <View style={styles.repostBadge}>
-          <IcRepeat size={11} color={COLORS.white} />
-          {post.reposted_by.avatar_url ? (
-            <Image source={{ uri: post.reposted_by.avatar_url }} style={styles.repostAvatar} />
-          ) : (
-            <View style={[styles.repostAvatar, styles.repostAvatarFallback]}>
-              <Text style={styles.repostAvatarInitial}>{post.reposted_by.username[0]?.toUpperCase()}</Text>
-            </View>
-          )}
-          <Text style={styles.repostText}>@{post.reposted_by.username}</Text>
+      {post.reposted_by && post.reposted_by.count > 0 && (
+        <View style={styles.repostBadgeRow}>
+          <View style={styles.repostBadge}>
+            {post.reposted_by.count === 1 ? (
+              <>
+                {post.reposted_by.recent[0].avatar_url ? (
+                  <Image source={{ uri: post.reposted_by.recent[0].avatar_url }} style={styles.repostAvatar} />
+                ) : (
+                  <View style={[styles.repostAvatar, styles.repostAvatarFallback]}>
+                    <Text style={styles.repostAvatarInitial}>{post.reposted_by.recent[0].username[0]?.toUpperCase()}</Text>
+                  </View>
+                )}
+                <Text style={styles.repostText}>@{post.reposted_by.recent[0].username} republication</Text>
+              </>
+            ) : (
+              <>
+                <View style={styles.repostAvatarStack}>
+                  {post.reposted_by.recent.map((r, i) => (
+                    r.avatar_url ? (
+                      <Image key={r.id} source={{ uri: r.avatar_url }} style={[styles.repostAvatar, styles.repostAvatarStacked, { marginLeft: i === 0 ? 0 : -8, zIndex: post.reposted_by!.recent.length - i }]} />
+                    ) : (
+                      <View key={r.id} style={[styles.repostAvatar, styles.repostAvatarStacked, styles.repostAvatarFallback, { marginLeft: i === 0 ? 0 : -8, zIndex: post.reposted_by!.recent.length - i }]}>
+                        <Text style={styles.repostAvatarInitial}>{r.username[0]?.toUpperCase()}</Text>
+                      </View>
+                    )
+                  ))}
+                </View>
+                <Text style={styles.repostText}>{post.reposted_by.count} republications</Text>
+              </>
+            )}
+          </View>
+          <TouchableOpacity
+            style={styles.repostQuickBtn}
+            activeOpacity={0.7}
+            onPress={() => !justReposted && repostMutation.mutate()}
+          >
+            <IcRepeat size={13} color={justReposted ? COLORS.primaryLight : COLORS.white} />
+          </TouchableOpacity>
         </View>
       )}
 
@@ -1006,13 +1043,22 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
 
-  repostBadge: {
+  repostBadgeRow: {
     position: 'absolute', bottom: 200, left: 14,
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+  },
+  repostBadge: {
     flexDirection: 'row', alignItems: 'center', gap: 5,
     backgroundColor: 'rgba(0,0,0,0.45)', borderRadius: 20,
     paddingHorizontal: 8, paddingVertical: 4,
   },
+  repostQuickBtn: {
+    width: 24, height: 24, borderRadius: 12,
+    backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'center',
+  },
   repostAvatar: { width: 16, height: 16, borderRadius: 8, overflow: 'hidden' },
+  repostAvatarStack: { flexDirection: 'row', alignItems: 'center' },
+  repostAvatarStacked: { borderWidth: 1, borderColor: 'rgba(0,0,0,0.45)' },
   repostAvatarFallback: { backgroundColor: COLORS.primaryBg, alignItems: 'center', justifyContent: 'center' },
   repostAvatarInitial: { fontSize: 8, fontWeight: '700', color: COLORS.primary },
   repostText: { fontSize: 11, color: 'rgba(255,255,255,0.9)', fontWeight: '600' },

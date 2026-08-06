@@ -574,7 +574,7 @@ const styles = StyleSheet.create({
   followBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     backgroundColor: COLORS.primary, borderRadius: RADIUS.full,
-    paddingHorizontal: 28, paddingVertical: 10, ...SHADOW.green,
+    paddingHorizontal: 28, paddingVertical: 10,
   },
   followText: { fontSize: FONT.size.sm, fontWeight: FONT.weight.semibold, color: COLORS.white },
   messageBtn: {

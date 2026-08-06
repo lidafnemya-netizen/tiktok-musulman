@@ -1,7 +1,7 @@
 import React from 'react';
 import {
   View, Text, FlatList, StyleSheet, TouchableOpacity, Image,
-  ActivityIndicator, RefreshControl, ScrollView, Alert,
+  ActivityIndicator, RefreshControl, ScrollView, Alert, StatusBar,
 } from 'react-native';
 import { launchImageLibrary } from 'react-native-image-picker';
 import { useNavigation } from '@react-navigation/native';
@@ -98,7 +98,8 @@ export default function MessagesScreen() {
     navigation.navigate('Stories', { userId: c.other_user.id, queueUserIds: storyQueue });
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.bg }]}>
+    <View style={[styles.container, { backgroundColor: theme.surface }]}>
+      <StatusBar barStyle={theme.isDark ? 'light-content' : 'dark-content'} backgroundColor={theme.surface} translucent={false} />
       <View style={{ height: insets.top, backgroundColor: theme.surface }} />
       {/* Header */}
       <View style={[styles.header, { backgroundColor: theme.surface, borderBottomColor: theme.borderLight }]}>
@@ -121,8 +122,8 @@ export default function MessagesScreen() {
         </View>
       </View>
 
-      {isLoading ? (
-        <View style={styles.center}>
+      {isLoading && !data ? (
+        <View style={[styles.center, { backgroundColor: theme.surface }]}>
           <ActivityIndicator color={COLORS.primaryLight} size="large" />
         </View>
       ) : (

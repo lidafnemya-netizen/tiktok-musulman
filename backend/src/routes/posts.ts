@@ -130,7 +130,7 @@ async function buildFeedItems(userId: string, seenIds: string[], poolSize = 80) 
 }
 
 export async function postRoutes(app: FastifyInstance) {
-  // ── FOLLOWING FEED ──────────────────────────────────────────────────
+  // ── FOLLOWING FEED (own posts + reposts by people you follow) ────────
   app.get('/following', { preHandler: authenticate }, async (req, reply) => {
     const userId = req.currentUser!.id;
     const { cursor, limit = '10' } = req.query as { cursor?: string; limit?: string };
@@ -143,44 +143,79 @@ export async function postRoutes(app: FastifyInstance) {
     const ids = follows.map(f => f.following_id);
     if (ids.length === 0) return reply.send({ items: [], next_cursor: null });
 
-    const posts = await prisma.post.findMany({
-      where: {
-        user_id: { in: ids },
-        is_thread: false,
-        ...(cursor ? { id: { lt: cursor } } : {}),
-      },
-      take: lim + 1,
-      orderBy: { created_at: 'desc' },
-      include: {
-        ...POST_INCLUDE,
-        _count: { select: { likes: true, comments: true } },
-      },
-    });
+    const POOL = lim * 4;
 
-    const hasMore = posts.length > lim;
-    const items = hasMore ? posts.slice(0, lim) : posts;
+    const [ownPosts, reposts] = await Promise.all([
+      prisma.post.findMany({
+        where: { user_id: { in: ids }, is_thread: false, status: 'ACTIVE' },
+        take: POOL,
+        orderBy: { created_at: 'desc' },
+        include: { ...POST_INCLUDE, _count: { select: { likes: true, comments: true } } },
+      }),
+      prisma.repost.findMany({
+        where: { user_id: { in: ids } },
+        take: POOL,
+        orderBy: { created_at: 'desc' },
+        include: {
+          user: { select: { id: true, username: true, avatar_url: true } },
+          post: { include: { ...POST_INCLUDE, _count: { select: { likes: true, comments: true } } } },
+        },
+      }),
+    ]);
 
+    // Merge own-followed posts with reposts-by-followed-users into one timeline,
+    // keyed by post id so a post reposted by several followed users appears once.
+    type Reposter = { id: string; username: string; avatar_url: string | null; created_at: Date };
+    const merged = new Map<string, { post: (typeof ownPosts)[number]; sortAt: Date; reposters: Reposter[] }>();
+
+    for (const p of ownPosts) {
+      merged.set(p.id, { post: p, sortAt: p.created_at, reposters: [] });
+    }
+    for (const r of reposts) {
+      if (!r.post || r.post.status !== 'ACTIVE' || r.post.is_thread) continue;
+      const reposter: Reposter = { id: r.user.id, username: r.user.username, avatar_url: r.user.avatar_url, created_at: r.created_at };
+      const existing = merged.get(r.post_id);
+      if (existing) {
+        existing.reposters.push(reposter);
+        if (r.created_at > existing.sortAt) existing.sortAt = r.created_at;
+      } else {
+        merged.set(r.post_id, { post: r.post as (typeof ownPosts)[number], sortAt: r.created_at, reposters: [reposter] });
+      }
+    }
+
+    let timeline = [...merged.values()].sort((a, b) => b.sortAt.getTime() - a.sortAt.getTime());
+    if (cursor) {
+      const cursorMs = new Date(cursor).getTime();
+      timeline = timeline.filter(e => e.sortAt.getTime() < cursorMs);
+    }
+    const hasMore = timeline.length > lim;
+    const page = timeline.slice(0, lim);
+
+    const postIds = page.map(e => e.post.id);
     const [likedIds, savedIds, unseenStories] = await Promise.all([
-      prisma.like.findMany({
-        where: { user_id: userId, post_id: { in: items.map(p => p.id) } },
-        select: { post_id: true },
-      }),
-      prisma.favorite.findMany({
-        where: { user_id: userId, post_id: { in: items.map(p => p.id) } },
-        select: { post_id: true },
-      }),
-      getUnseenStorySet(userId, items.map(p => p.user.id)),
+      prisma.like.findMany({ where: { user_id: userId, post_id: { in: postIds } }, select: { post_id: true } }),
+      prisma.favorite.findMany({ where: { user_id: userId, post_id: { in: postIds } }, select: { post_id: true } }),
+      getUnseenStorySet(userId, page.map(e => e.post.user.id)),
     ]);
     const likedSet = new Set(likedIds.map(l => l.post_id));
     const savedSet = new Set(savedIds.map(s => s.post_id));
 
     return reply.send({
-      items: items.map(p => ({
-        ...p, is_liked: likedSet.has(p.id), is_saved: savedSet.has(p.id),
-        like_count: p.like_count, comment_count: p.comment_count,
-        user: { ...p.user, is_following: true, has_unseen_story: unseenStories.has(p.user.id) },
-      })),
-      next_cursor: hasMore ? items[items.length - 1].id : null,
+      items: page.map(e => {
+        const p = e.post;
+        const reposters = e.reposters.sort((a, b) => b.created_at.getTime() - a.created_at.getTime());
+        return {
+          ...p,
+          is_liked: likedSet.has(p.id), is_saved: savedSet.has(p.id),
+          like_count: p.like_count, comment_count: p.comment_count,
+          user: { ...p.user, is_following: ids.includes(p.user_id), has_unseen_story: unseenStories.has(p.user.id) },
+          reposted_by: reposters.length > 0 ? {
+            count: reposters.length,
+            recent: reposters.slice(0, 3).map(r => ({ id: r.id, username: r.username, avatar_url: r.avatar_url })),
+          } : null,
+        };
+      }),
+      next_cursor: hasMore ? page[page.length - 1].sortAt.toISOString() : null,
     });
   });
 
@@ -420,6 +455,22 @@ export async function postRoutes(app: FastifyInstance) {
     if (post.user_id !== req.currentUser!.id) return reply.status(403).send({ error: 'Forbidden' });
 
     const updated = await prisma.post.update({ where: { id }, data: parsed.data });
+    return reply.send(updated);
+  });
+
+  // ── PUBLISH DRAFT (owner-only) ────────────────────────────────────────
+  app.post('/:id/publish', { preHandler: authenticate }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const post = await prisma.post.findUnique({ where: { id }, select: { user_id: true, status: true } });
+    if (!post) return reply.status(404).send({ error: 'Not found' });
+    if (post.user_id !== req.currentUser!.id) return reply.status(403).send({ error: 'Forbidden' });
+    if (post.status !== 'DRAFT') return reply.status(400).send({ error: 'Not a draft' });
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const p = await tx.post.update({ where: { id }, data: { status: 'ACTIVE' } });
+      await tx.user.update({ where: { id: req.currentUser!.id }, data: { post_count: { increment: 1 } } });
+      return p;
+    });
     return reply.send(updated);
   });
 

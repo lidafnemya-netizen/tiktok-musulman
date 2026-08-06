@@ -48,6 +48,8 @@ import HashtagScreen from '../screens/explore/HashtagScreen';
 import CreatorStatsScreen from '../screens/profile/CreatorStatsScreen';
 import StoriesScreen from '../screens/feed/StoriesScreen';
 import SearchScreen from '../screens/search/SearchScreen';
+import DraftsListScreen from '../screens/profile/DraftsListScreen';
+import DraftEditScreen from '../screens/upload/DraftEditScreen';
 
 export type RootStackParamList = {
   Auth: undefined;
@@ -73,6 +75,8 @@ export type RootStackParamList = {
   Search: undefined;
   CreateCamera: undefined;
   PostComposer: { media: { uri: string; type: 'photo' | 'video' }[]; soundId?: string };
+  DraftsList: undefined;
+  DraftEdit: { postId: string };
 };
 
 export type AuthStackParamList = {
@@ -266,6 +270,10 @@ export function AppNavigator() {
               options={{ animation: 'fade', presentation: 'fullScreenModal', gestureEnabled: false }} />
             <RootStack.Screen name="PostComposer" component={PostComposerScreen}
               options={{ animation: 'slide_from_right', gestureEnabled: true }} />
+            <RootStack.Screen name="DraftsList" component={DraftsListScreen}
+              options={{ animation: 'slide_from_right', gestureEnabled: true }} />
+            <RootStack.Screen name="DraftEdit" component={DraftEditScreen}
+              options={{ animation: 'slide_from_bottom', presentation: 'modal', gestureEnabled: true }} />
           </>
         ) : (
           <RootStack.Screen name="Auth" component={AuthNavigator} />

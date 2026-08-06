@@ -23,7 +23,12 @@ export async function authRoutes(app: FastifyInstance) {
     const password_hash = await hashPassword(password);
     const user = await prisma.user.create({
       data: { username, email, password_hash, display_name, gender },
-      select: { id: true, username: true, email: true, display_name: true, gender: true, role: true },
+      select: {
+        id: true, username: true, email: true, display_name: true, gender: true, role: true,
+        bio: true, avatar_url: true, cover_url: true, is_verified: true,
+        follower_count: true, following_count: true, post_count: true, like_count: true,
+        profile_view_enabled: true,
+      },
     });
 
     await prisma.auditLog.create({
@@ -74,9 +79,17 @@ export async function authRoutes(app: FastifyInstance) {
         username: user.username,
         email: user.email,
         display_name: user.display_name,
+        bio: user.bio,
         avatar_url: user.avatar_url,
+        cover_url: user.cover_url,
         gender: user.gender,
         role: user.role,
+        is_verified: user.is_verified,
+        follower_count: user.follower_count,
+        following_count: user.following_count,
+        post_count: user.post_count,
+        like_count: user.like_count,
+        profile_view_enabled: user.profile_view_enabled,
       },
       access_token,
       refresh_token,
