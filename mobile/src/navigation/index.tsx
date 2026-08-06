@@ -3,7 +3,6 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
 import {
   View, Text, StyleSheet, TouchableOpacity, ActivityIndicator,
-  Modal, Pressable,
 } from 'react-native';
 import { useTheme } from '../hooks/useTheme';
 import { NavigationContainer } from '@react-navigation/native';
@@ -14,7 +13,7 @@ import { useAuthStore } from '../stores/authStore';
 import { COLORS, FONT, SPACING, RADIUS, SHADOW } from '../constants/theme';
 import {
   IcHome, IcExplore, IcCreate, IcMail,
-  IcProfile, IcBrand, IcLive, IcPen,
+  IcProfile, IcBrand,
 } from '../components/ui/Icons';
 
 // Auth
@@ -34,7 +33,10 @@ import UserProfileScreen from '../screens/profile/UserProfileScreen';
 import ConversationScreen from '../screens/messages/ConversationScreen';
 import NotificationsScreen from '../screens/notifications/NotificationsScreen';
 import SettingsScreen from '../screens/settings/SettingsScreen';
+import ProfileViewsScreen from '../screens/profile/ProfileViewsScreen';
 import ThreadComposerScreen from '../screens/threads/ThreadComposerScreen';
+import CreateCameraScreen from '../screens/upload/CreateCameraScreen';
+import PostComposerScreen from '../screens/upload/PostComposerScreen';
 import SoundScreen from '../screens/sound/SoundScreen';
 import VideoPlayerScreen from '../screens/feed/VideoPlayerScreen';
 import ThreadDetailScreen from '../screens/threads/ThreadDetailScreen';
@@ -56,9 +58,10 @@ export type RootStackParamList = {
   Messages: undefined;
   Notifications: undefined;
   Settings: undefined;
+  ProfileViews: undefined;
   ThreadComposer: undefined;
   Sound: { soundId: string; title: string; artist?: string | null };
-  VideoPlayer: { postId: string };
+  VideoPlayer: { postId: string; userId?: string };
   ThreadDetail: { threadId: string };
   GoLive: undefined;
   LiveViewer: { sessionId: string; broadcasterId: string };
@@ -66,8 +69,10 @@ export type RootStackParamList = {
   Followers: { userId: string; username: string; type: 'followers' | 'following' };
   Hashtag: { tag: string };
   CreatorStats: undefined;
-  Stories: { userId: string };
+  Stories: { userId: string; queueUserIds?: string[] };
   Search: undefined;
+  CreateCamera: undefined;
+  PostComposer: { media: { uri: string; type: 'photo' | 'video' }[]; soundId?: string };
 };
 
 export type AuthStackParamList = {
@@ -115,61 +120,21 @@ function useUnreadCount() {
 function CustomTabBar({ state, descriptors, navigation }: any) {
   const insets = useSafeAreaInsets();
   const theme = useTheme();
-  const [showCreateSheet, setShowCreateSheet] = useState(false);
   const unread = useUnreadCount();
 
   return (
     <>
-      {/* Create bottom sheet */}
-      <Modal visible={showCreateSheet} transparent animationType="slide" onRequestClose={() => setShowCreateSheet(false)}>
-        <Pressable style={styles.sheetBackdrop} onPress={() => setShowCreateSheet(false)}>
-          <Pressable style={[styles.sheetContainer, { paddingBottom: insets.bottom + 16, backgroundColor: theme.surface }]}>
-            <View style={[styles.sheetHandle, { backgroundColor: theme.border }]} />
-            <Text style={[styles.sheetTitle, { color: theme.text }]}>Créer</Text>
-            <TouchableOpacity style={[styles.sheetOption, { backgroundColor: theme.bg }]} activeOpacity={0.8}
-              onPress={() => { setShowCreateSheet(false); navigation.navigate('Create'); }}>
-              <View style={[styles.sheetOptionIcon, { backgroundColor: theme.primaryBg }]}>
-                <IcCreate size={24} color={COLORS.primary} />
-              </View>
-              <View style={styles.sheetOptionText}>
-                <Text style={[styles.sheetOptionTitle, { color: theme.text }]}>Publier une vidéo</Text>
-                <Text style={[styles.sheetOptionSub, { color: theme.textMuted }]}>Partage une vidéo avec la communauté</Text>
-              </View>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.sheetOption, { backgroundColor: theme.bg }]} activeOpacity={0.8}
-              onPress={() => { setShowCreateSheet(false); navigation.navigate('ThreadComposer'); }}>
-              <View style={[styles.sheetOptionIcon, { backgroundColor: theme.primaryBg }]}>
-                <IcPen size={24} color={COLORS.primary} />
-              </View>
-              <View style={styles.sheetOptionText}>
-                <Text style={[styles.sheetOptionTitle, { color: theme.text }]}>Nouveau fil</Text>
-                <Text style={[styles.sheetOptionSub, { color: theme.textMuted }]}>Texte, image ou vidéo courte</Text>
-              </View>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.sheetOption, { backgroundColor: theme.bg }]} activeOpacity={0.8}
-              onPress={() => { setShowCreateSheet(false); navigation.navigate('GoLive'); }}>
-              <View style={[styles.sheetOptionIcon, { backgroundColor: '#FF3B3020' }]}>
-                <IcLive size={24} color="#FF3B30" />
-              </View>
-              <View style={styles.sheetOptionText}>
-                <Text style={[styles.sheetOptionTitle, { color: theme.text }]}>Démarrer un live</Text>
-                <Text style={[styles.sheetOptionSub, { color: theme.textMuted }]}>Streaming en direct avec chat</Text>
-              </View>
-            </TouchableOpacity>
-          </Pressable>
-        </Pressable>
-      </Modal>
 
       <View style={[
         styles.tabBar,
-        { paddingBottom: insets.bottom > 0 ? insets.bottom - 4 : 4, backgroundColor: theme.tabBg, borderTopColor: theme.navBorder },
+        { paddingBottom: insets.bottom > 0 ? Math.max(insets.bottom - 14, 4) : 4, backgroundColor: theme.tabBg, borderTopColor: theme.navBorder },
       ]}>
         {state.routes.map((route: any, index: number) => {
           const isFocused = state.index === index;
           const isCreate = route.name === 'Create';
 
           const onPress = () => {
-            if (isCreate) { setShowCreateSheet(true); return; }
+            if (isCreate) { navigation.navigate('CreateCamera'); return; }
             const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
             if (!isFocused && !event.defaultPrevented) navigation.navigate(route.name);
           };
@@ -271,6 +236,8 @@ export function AppNavigator() {
               options={{ animation: 'slide_from_right', gestureEnabled: true }} />
             <RootStack.Screen name="Settings" component={SettingsScreen}
               options={{ animation: 'slide_from_right', gestureEnabled: true }} />
+            <RootStack.Screen name="ProfileViews" component={ProfileViewsScreen}
+              options={{ animation: 'slide_from_right', gestureEnabled: true }} />
             <RootStack.Screen name="ThreadComposer" component={ThreadComposerScreen}
               options={{ animation: 'slide_from_bottom', presentation: 'modal', gestureEnabled: true }} />
             <RootStack.Screen name="Sound" component={SoundScreen}
@@ -295,6 +262,10 @@ export function AppNavigator() {
               options={{ animation: 'fade', presentation: 'fullScreenModal', gestureEnabled: false }} />
             <RootStack.Screen name="Search" component={SearchScreen}
               options={{ animation: 'slide_from_right', gestureEnabled: true }} />
+            <RootStack.Screen name="CreateCamera" component={CreateCameraScreen}
+              options={{ animation: 'fade', presentation: 'fullScreenModal', gestureEnabled: false }} />
+            <RootStack.Screen name="PostComposer" component={PostComposerScreen}
+              options={{ animation: 'slide_from_right', gestureEnabled: true }} />
           </>
         ) : (
           <RootStack.Screen name="Auth" component={AuthNavigator} />
@@ -316,7 +287,7 @@ const styles = StyleSheet.create({
   tabBar: {
     flexDirection: 'row',
     borderTopWidth: 0.5,
-    paddingTop: 6, paddingHorizontal: SPACING.sm,
+    paddingTop: 10, paddingHorizontal: SPACING.sm,
   },
   notifBadge: {
     position: 'absolute', top: -4, right: -6,
@@ -330,15 +301,15 @@ const styles = StyleSheet.create({
   tabLabelActive: { fontWeight: FONT.weight.semibold },
   createBtn: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   createInner: {
-    width: 52, height: 52, borderRadius: 26, // circle like the design
+    width: 44, height: 44, borderRadius: 22, // circle like the design — contained within bar bounds
     backgroundColor: COLORS.primary,
     alignItems: 'center', justifyContent: 'center',
-    marginTop: -14, ...SHADOW.green,
+    ...SHADOW.green,
   },
 
   sheetBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   sheetContainer: {
-    backgroundColor: COLORS.white, borderTopLeftRadius: 20, borderTopRightRadius: 20,
+    backgroundColor: COLORS.white, borderTopLeftRadius: RADIUS.xl, borderTopRightRadius: RADIUS.xl,
     padding: SPACING.md, gap: 4,
   },
   sheetHandle: {
@@ -348,10 +319,10 @@ const styles = StyleSheet.create({
   sheetTitle: { fontSize: FONT.size.lg, fontWeight: FONT.weight.bold, color: COLORS.text, marginBottom: 8, paddingHorizontal: 4 },
   sheetOption: {
     flexDirection: 'row', alignItems: 'center', gap: 14,
-    padding: SPACING.md, borderRadius: 12,
+    padding: SPACING.md, borderRadius: RADIUS.lg,
     backgroundColor: COLORS.bg, marginBottom: 6,
   },
-  sheetOptionIcon: { width: 48, height: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  sheetOptionIcon: { width: 48, height: 48, borderRadius: RADIUS.md, alignItems: 'center', justifyContent: 'center' },
   sheetOptionText: { flex: 1, gap: 2 },
   sheetOptionTitle: { fontSize: FONT.size.base, fontWeight: FONT.weight.semibold, color: COLORS.text },
   sheetOptionSub: { fontSize: FONT.size.xs, color: COLORS.textMuted },

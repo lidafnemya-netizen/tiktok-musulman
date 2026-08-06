@@ -23,6 +23,7 @@ interface Thread {
   reply_count: number;
   repost_count: number;
   is_liked: boolean;
+  is_reposted?: boolean;
   created_at: string;
   user: { id: string; username: string; display_name: string; avatar_url: string | null; is_verified: boolean };
 }
@@ -40,6 +41,8 @@ function fmtTime(iso: string) {
 function ThreadItem({ item, onUserPress }: { item: Thread; onUserPress: () => void }) {
   const [liked, setLiked] = useState(item.is_liked);
   const [likeCount, setLikeCount] = useState(item.like_count);
+  const [reposted, setReposted] = useState(!!item.is_reposted);
+  const [repostCount, setRepostCount] = useState(item.repost_count);
 
   const likeMutation = useMutation({
     mutationFn: () => api.post(`/threads/${item.id}/like`),
@@ -51,6 +54,19 @@ function ThreadItem({ item, onUserPress }: { item: Thread; onUserPress: () => vo
     onError: () => {
       setLiked(item.is_liked);
       setLikeCount(item.like_count);
+    },
+  });
+
+  const repostMutation = useMutation({
+    mutationFn: () => api.post(`/posts/${item.id}/repost`),
+    onMutate: () => {
+      const was = reposted;
+      setReposted(!was);
+      setRepostCount((c) => (was ? c - 1 : c + 1));
+    },
+    onError: () => {
+      setReposted(!!item.is_reposted);
+      setRepostCount(item.repost_count);
     },
   });
 
@@ -84,9 +100,9 @@ function ThreadItem({ item, onUserPress }: { item: Thread; onUserPress: () => vo
             <IcComment size={18} color={COLORS.textMuted} />
             {item.reply_count > 0 && <Text style={styles.actionCount}>{item.reply_count}</Text>}
           </TouchableOpacity>
-          <TouchableOpacity style={styles.actionBtn} activeOpacity={0.7}>
-            <IcShare size={18} color={COLORS.textMuted} />
-            {item.repost_count > 0 && <Text style={styles.actionCount}>{item.repost_count}</Text>}
+          <TouchableOpacity style={styles.actionBtn} onPress={() => repostMutation.mutate()} activeOpacity={0.7}>
+            <IcShare size={18} color={reposted ? COLORS.primary : COLORS.textMuted} />
+            {repostCount > 0 && <Text style={[styles.actionCount, reposted && { color: COLORS.primary }]}>{repostCount}</Text>}
           </TouchableOpacity>
         </View>
       </View>

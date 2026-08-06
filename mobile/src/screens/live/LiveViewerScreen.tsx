@@ -157,7 +157,7 @@ export default function LiveViewerScreen({ route, navigation }: Props) {
         <RTCView streamURL={remoteStream.toURL()} style={StyleSheet.absoluteFill} objectFit="cover" zOrder={0} />
       ) : (
         <View style={[StyleSheet.absoluteFill, styles.waiting]}>
-          <ActivityIndicator color={COLORS.primary} size="large" />
+          <ActivityIndicator color={COLORS.primaryLight} size="large" />
           <Text style={styles.waitingText}>Connexion au live...</Text>
         </View>
       )}

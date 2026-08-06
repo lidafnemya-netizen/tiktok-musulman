@@ -284,3 +284,50 @@
 ---
 
 *Mis à jour : 2026-06-04*
+
+---
+
+## 🆕 SESSION 2026-08-03 — Nouvelle liste utilisateur
+
+### 🎨 Design / Theme
+- [ ] Extraire couleurs image 1 (light) et image 2 (dark) — attendre images
+- [ ] Appliquer nouveau design system partout (espaces, arrondis, formes, icons, police, bordures) mobile + admin
+
+### 🏛️ Admin
+- [ ] Refonte UI admin
+- [ ] Module stats (users/posts/comments/live)
+- [ ] Module gestion comptes (list, ban, promote)
+- [ ] Module gestion publications (list, hide, delete)
+- [ ] Module gestion commentaires (list, delete, flag)
+- [ ] Module support/tickets/demandes (list, reply, close)
+- [ ] Ajouter des admins (invite/promote users to ADMIN)
+- [ ] Paramètres globaux app
+
+### 📱 Mobile — corrections UI
+- [ ] Modifier profil: bouton changer photo de profil
+- [ ] Header conversation DM: afficher pseudo destinataire
+- [ ] Pour toi: afficher display_name (pas username)
+- [ ] Publier: onglet "Photo" + sélection multiple galerie
+- [ ] Publier: fix bug description (impossible d'écrire)
+- [ ] Pour toi: retirer icons "son" et "x1"
+- [ ] Pour toi: recadrer boutons profil/like/comment/share vers centre-droit
+- [ ] Vidéo: long-press → sheet "republier/partager/..."
+- [ ] Comments sheet: swipe down pour fermer
+- [ ] Profil: swipe pour défiler ses propres vidéos
+- [ ] Publier: label "pourtoi" (pas "feed"), "like" (pas "j'aime")
+- [ ] Profil: retirer bouton "appareil photo" au-dessus avatar
+- [ ] Fils: multi-photos
+- [ ] Pour toi: recadrer live+vidéo (live déborde sur vidéo suivante, pseudo caché)
+- [ ] Notifications: afficher pseudo par notif
+- [ ] Pour toi: exclure ses propres vidéos
+- [ ] Profil: retirer onglet "notification"
+- [ ] Favoris: onglets Vidéos / Sons / Collections
+- [ ] Favoris: créer collections + ajouter vidéos
+- [ ] Messagerie: story via "+" en haut à gauche
+
+### 🔐 Backend — data unique
+- [x] Fix like unique par user (contrainte DB déjà en place)
+- [x] Fix favorite unique par user (contrainte DB déjà en place)
+- [x] Fix view unique par user (compteur incrémente 1x par user)
+- [x] Enlever double-comptage vue sur GET /:id
+

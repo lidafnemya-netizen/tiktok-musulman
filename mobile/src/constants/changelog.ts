@@ -6,6 +6,43 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '2.4.0',
+    date: '2026-08-06 · 00h35',
+    changes: [
+      'Nouvelle direction artistique : crème + vert forêt profond (clair), vert forêt + or (sombre)',
+      'Tous les tokens couleur/arrondi/ombre revus pour un rendu premium cohérent',
+      'Boutons pill, cartes arrondies (20-28px), palette chaude sur toute l\'app',
+      'Fix contraste : icônes invisibles en mode sombre (Paramètres, Messages)',
+      'Bouton actif nav/onglets : vert en clair, or en sombre',
+      'Installation du skill design ui-ux-pro-max (84 styles, 192 palettes, guidelines UX)',
+    ],
+  },
+  {
+    version: '2.3.0',
+    date: '2026-08-03 · 14h10',
+    changes: [
+      'Backend redéployé (Mac local + tunnel) après expiration Railway',
+      'Like / Favori / Vue : unique par compte, plus de double-comptage',
+      'Feed Pour toi : exclut désormais ses propres vidéos',
+      'Pour toi : nom affiché au lieu du nom d\'utilisateur',
+      'Icônes son et badge x1 retirés des vidéos',
+      'Boutons profil/like/commentaire/partage recentrés au milieu droit',
+      'Long-press sur une vidéo → menu republier / partager / ajouter à une collection',
+      'Favoris : onglets Vidéos, Sons, Collections',
+      'Collections : création + ajout de vidéos depuis une vidéo',
+      'Swipe vertical dans ses propres vidéos depuis le profil',
+      'Publier : sélection multiple de photos depuis la galerie',
+      'Fils : ajout de plusieurs photos, affichage en galerie horizontale',
+      'Fix : bug de saisie dans la description à la publication',
+      'Story : bouton "+" depuis la messagerie',
+      'Modifier le profil : photo de couverture personnalisable',
+      'Live/vidéo dans Pour toi : recadrage, plus de débordement sur la vidéo suivante',
+      'Notifications : pseudo affiché dans chaque notification',
+      'Labels : "Pourtoi" et "Like" à la place de "feed" et "j\'aime"',
+      'Admin : pages Comments et Settings, gestion des rôles admin',
+    ],
+  },
+  {
     version: '2.2.0',
     date: '2026-06-05 · 22h00',
     changes: [

@@ -14,7 +14,7 @@ import { api, getTokens } from '../../api/client';
 import { RootStackParamList } from '../../navigation';
 import { COLORS, FONT, SPACING, RADIUS, SHADOW, API_BASE_URL } from '../../constants/theme';
 import { useTheme } from '../../hooks/useTheme';
-import { IcSettings, IcSave, IcCheck, IcHeart, IcGrid, IcEdit, IcCamera, IcChart, IcPlay, IcRepeat } from '../../components/ui/Icons';
+import { IcSettings, IcSave, IcCheck, IcHeart, IcGrid, IcEdit, IcCamera, IcChart, IcPlay, IcRepeat, IcThreads, IcEye } from '../../components/ui/Icons';
 import { EditProfileScreen } from './EditProfileScreen';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -48,9 +48,17 @@ interface Thread {
   created_at: string;
 }
 
-const TABS = ['Vidéos', 'Fils', "J'aime", 'Favoris', 'Reposts'];
+const TABS = [
+  { key: 'Vidéos', Icon: IcGrid },
+  { key: 'Fils', Icon: IcThreads },
+  { key: 'Like', Icon: IcHeart },
+  { key: 'Favoris', Icon: IcSave },
+  { key: 'Reposts', Icon: IcRepeat },
+];
 const LIKE_SUBTABS = ['Pour toi', 'Fils'] as const;
 type LikeSubTab = typeof LIKE_SUBTABS[number];
+const FAV_SUBTABS = ['Vidéos', 'Sons', 'Collections'] as const;
+type FavSubTab = typeof FAV_SUBTABS[number];
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
@@ -69,6 +77,7 @@ export default function ProfileScreen() {
   const qc = useQueryClient();
   const [activeTab, setActiveTab] = useState(0);
   const [likeSubTab, setLikeSubTab] = useState<LikeSubTab>('Pour toi');
+  const [favSubTab, setFavSubTab] = useState<FavSubTab>('Vidéos');
   const [editVisible, setEditVisible] = useState(false);
   const [avatarLoading, setAvatarLoading] = useState(false);
   const [coverLoading, setCoverLoading] = useState(false);
@@ -98,6 +107,12 @@ export default function ProfileScreen() {
     queryKey: ['user-liked-threads', user?.id],
     queryFn: () => api.get('/threads/liked').then((r) => r.data).catch(() => ({ items: [] })),
     enabled: !!user?.id && activeTab === 2 && likeSubTab === 'Fils',
+  });
+
+  const { data: collections, isLoading: collectionsLoading, refetch: refetchCollections } = useQuery<{ items: { id: string; name: string; description: string | null; cover_url: string | null; item_count: number }[] }>({
+    queryKey: ['collections'],
+    queryFn: () => api.get('/collections').then((r) => r.data).catch(() => ({ items: [] })),
+    enabled: !!user?.id && activeTab === 3 && favSubTab === 'Collections',
   });
 
   const { data: favorites, isLoading: favLoading } = useQuery<{ items: Post[] }>({
@@ -201,67 +216,76 @@ export default function ProfileScreen() {
         {/* Top bar */}
         <View style={[styles.topBar, { backgroundColor: theme.surface, borderBottomColor: theme.borderLight }]}>
           <Text style={[styles.topUsername, { color: theme.text }]}>@{user.username}</Text>
-          <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.navigate('Settings')} activeOpacity={0.7}>
-            <IcSettings size={22} color={theme.textMuted} />
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.navigate('ProfileViews')} activeOpacity={0.7}>
+              <IcEye size={22} color={theme.textMuted} />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.navigate('Settings')} activeOpacity={0.7}>
+              <IcSettings size={22} color={theme.textMuted} />
+            </TouchableOpacity>
+          </View>
         </View>
 
-        {/* Cover photo */}
-        <View style={styles.coverWrap}>
-          {(user as any).cover_url && !coverError ? (
+        {/* Cover photo — collapsed when no cover set (no empty placeholder band) */}
+        {(user as any).cover_url && !coverError ? (
+          <View style={styles.coverWrap}>
             <Image
               source={{ uri: (user as any).cover_url }}
               style={StyleSheet.absoluteFill}
               resizeMode="cover"
               onError={() => setCoverError(true)}
             />
-          ) : (
-            <View style={[StyleSheet.absoluteFill, { backgroundColor: COLORS.primaryBg }]} />
-          )}
-          {coverLoading && (
-            <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.3)' }]}>
-              <ActivityIndicator color={COLORS.white} />
-            </View>
-          )}
-        </View>
+            {coverLoading && (
+              <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.3)' }]}>
+                <ActivityIndicator color={COLORS.white} />
+              </View>
+            )}
+          </View>
+        ) : null}
 
         {/* Hero */}
-        <View style={[styles.heroSection, { backgroundColor: theme.surface }]}>
-          <TouchableOpacity onPress={handleAvatarPress} activeOpacity={0.85} style={styles.avatarWrap}>
-            {avatarLoading ? (
-              <View style={[styles.avatar, styles.avatarFallback]}>
-                <ActivityIndicator color={COLORS.primary} />
-              </View>
-            ) : user.avatar_url ? (
-              <Image source={{ uri: user.avatar_url }} style={styles.avatar} />
-            ) : (
-              <View style={[styles.avatar, styles.avatarFallback]}>
-                <Text style={styles.avatarText}>{user.display_name[0]?.toUpperCase()}</Text>
-              </View>
-            )}
-            <View style={styles.cameraOverlay}>
-              <IcEdit size={12} color={COLORS.white} />
-            </View>
-            {user.is_verified && (
-              <View style={styles.verifiedBadge}>
-                <IcCheck size={10} color={COLORS.white} strokeWidth={3} />
-              </View>
-            )}
-          </TouchableOpacity>
+        <View style={[styles.heroSection, { backgroundColor: theme.surface }, !(user as any).cover_url && { marginTop: 0 }]}>
+          <View style={styles.avatarWrap}>
+            <TouchableOpacity onPress={handleAvatarPress} activeOpacity={0.85}>
+              {avatarLoading ? (
+                <View style={[styles.avatar, styles.avatarFallback]}>
+                  <ActivityIndicator color={COLORS.primaryLight} />
+                </View>
+              ) : user.avatar_url ? (
+                <Image source={{ uri: user.avatar_url }} style={styles.avatar} />
+              ) : (
+                <View style={[styles.avatar, styles.avatarFallback]}>
+                  <Text style={styles.avatarText}>{user.display_name[0]?.toUpperCase()}</Text>
+                </View>
+              )}
+              {user.is_verified && (
+                <View style={styles.verifiedBadge}>
+                  <IcCheck size={10} color={COLORS.white} strokeWidth={3} />
+                </View>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.addStoryBadge, { borderColor: theme.surface }]}
+              onPress={() => navigation.navigate('CreateCamera')}
+              activeOpacity={0.85}
+              hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+            >
+              <Text style={styles.addStoryBadgeText}>+</Text>
+            </TouchableOpacity>
+          </View>
 
           <Text style={[styles.displayName, { color: theme.text }]}>{user.display_name}</Text>
+          <Text style={[styles.username, { color: theme.textMuted }]}>@{user.username}</Text>
           {user.bio ? <Text style={[styles.bio, { color: theme.textMuted }]}>{user.bio}</Text> : null}
 
           <View style={styles.statsRow}>
             <TouchableOpacity onPress={() => navigation.navigate('Followers', { userId: user.id, username: user.username, type: 'following' })} activeOpacity={0.7}>
               <StatItem label="Abonnements" value={user.following_count ?? 0} theme={theme} />
             </TouchableOpacity>
-            <View style={[styles.statDivider, { backgroundColor: theme.border }]} />
             <TouchableOpacity onPress={() => navigation.navigate('Followers', { userId: user.id, username: user.username, type: 'followers' })} activeOpacity={0.7}>
               <StatItem label="Abonnés" value={user.follower_count ?? 0} theme={theme} />
             </TouchableOpacity>
-            <View style={[styles.statDivider, { backgroundColor: theme.border }]} />
-            <StatItem label="Publications" value={user.post_count ?? 0} theme={theme} />
+            <StatItem label="J'aime" value={user.like_count ?? 0} theme={theme} />
           </View>
 
           <TouchableOpacity style={[styles.editBtn, { borderColor: theme.border }]} onPress={() => setEditVisible(true)} activeOpacity={0.8}>
@@ -272,8 +296,8 @@ export default function ProfileScreen() {
         {/* Tabs */}
         <View style={[styles.tabs, { backgroundColor: theme.surface, borderBottomColor: theme.borderLight }]}>
           {TABS.map((tab, i) => (
-            <TouchableOpacity key={tab} style={[styles.tab, activeTab === i && styles.tabActive]} onPress={() => setActiveTab(i)} activeOpacity={0.8}>
-              <Text style={[styles.tabLabel, { color: activeTab === i ? COLORS.primary : theme.textMuted }, activeTab === i && styles.tabLabelActive]}>{tab}</Text>
+            <TouchableOpacity key={tab.key} style={[styles.tab, activeTab === i && styles.tabActive]} onPress={() => setActiveTab(i)} activeOpacity={0.8}>
+              <tab.Icon size={20} color={activeTab === i ? COLORS.primary : theme.textMuted} strokeWidth={activeTab === i ? 2.4 : 1.8} />
             </TouchableOpacity>
           ))}
         </View>
@@ -296,14 +320,59 @@ export default function ProfileScreen() {
           </View>
         )}
 
+        {/* Favoris sub-tabs */}
+        {activeTab === 3 && (
+          <View style={[styles.subTabs, { backgroundColor: theme.surface, borderBottomColor: theme.borderLight }]}>
+            {FAV_SUBTABS.map(sub => (
+              <TouchableOpacity
+                key={sub}
+                style={[styles.subTab, favSubTab === sub && styles.subTabActive]}
+                onPress={() => setFavSubTab(sub)}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.subTabLabel, { color: favSubTab === sub ? COLORS.primary : theme.textMuted }, favSubTab === sub && styles.subTabLabelActive]}>
+                  {sub}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
         {/* Content */}
         {activeTab === 1 ? (
           <ThreadsTab threads={threads?.items} loading={threadsLoading} />
         ) : activeTab === 2 && likeSubTab === 'Fils' ? (
           <ThreadsTab threads={likedThreads?.items} loading={likedThreadsLoading} />
+        ) : activeTab === 3 && favSubTab === 'Sons' ? (
+          <View style={styles.emptyWrap}>
+            <Text style={styles.emptyTitle}>Aucun son</Text>
+            <Text style={styles.emptySubtitle}>Sauvegarde des sons pour les retrouver ici</Text>
+          </View>
+        ) : activeTab === 3 && favSubTab === 'Collections' ? (
+          <CollectionsTab
+            loading={collectionsLoading}
+            items={collections?.items}
+            onCreate={async () => {
+              // simple prompt-based creation
+              const name = await new Promise<string | null>((resolve) => {
+                Alert.prompt?.('Nouvelle collection', 'Nom de la collection', [
+                  { text: 'Annuler', style: 'cancel', onPress: () => resolve(null) },
+                  { text: 'Créer', onPress: (v?: string) => resolve(v ?? '') },
+                ]);
+              });
+              if (!name) return;
+              try {
+                await api.post('/collections', { name });
+                refetchCollections();
+              } catch (e: any) {
+                Alert.alert('Erreur', e?.message ?? 'Impossible de créer');
+              }
+            }}
+            onOpen={(id, name) => navigation.navigate('CollectionDetail' as any, { collectionId: id, name })}
+          />
         ) : activeTab === 4 ? (
           repostsLoading ? (
-            <ActivityIndicator color={COLORS.primary} style={{ marginTop: 40 }} />
+            <ActivityIndicator color={COLORS.primaryLight} style={{ marginTop: 40 }} />
           ) : (
             <FlatList
               data={(reposts?.items ?? []).map(r => ({ ...r.post, _repostedBy: r.user }))}
@@ -314,7 +383,7 @@ export default function ProfileScreen() {
               renderItem={({ item }) => (
                 <GridItem
                   item={item}
-                  onPress={() => navigation.navigate('VideoPlayer', { postId: item.id })}
+                  onPress={() => navigation.navigate('VideoPlayer', { postId: item.id, userId: user?.id })}
                   repostBadge
                 />
               )}
@@ -322,7 +391,7 @@ export default function ProfileScreen() {
             />
           )
         ) : gridLoading ? (
-          <ActivityIndicator color={COLORS.primary} style={{ marginTop: 40 }} />
+          <ActivityIndicator color={COLORS.primaryLight} style={{ marginTop: 40 }} />
         ) : (
           <FlatList
             data={gridData ?? []}
@@ -330,7 +399,7 @@ export default function ProfileScreen() {
             keyExtractor={(p) => p.id}
             scrollEnabled={false}
             columnWrapperStyle={styles.gridRow}
-            renderItem={({ item }) => <GridItem item={item} onPress={() => navigation.navigate('VideoPlayer', { postId: item.id })} />}
+            renderItem={({ item }) => <GridItem item={item} onPress={() => navigation.navigate('VideoPlayer', { postId: item.id, userId: user?.id })} />}
             ListEmptyComponent={<EmptyTab tab={activeTab} />}
           />
         )}
@@ -379,7 +448,7 @@ function GridItem({ item, onPress, repostBadge }: { item: Post & { _repostedBy?:
         </View>
       )}
       <View style={styles.gridOverlay}>
-        {repostBadge ? <IcPlay size={11} color={COLORS.white} /> : <IcHeart size={11} color={COLORS.white} />}
+        <IcEye size={12} color={COLORS.white} />
         <Text style={styles.gridViews}>{fmtNum(item.view_count)}</Text>
       </View>
       {repostBadge && (
@@ -391,15 +460,52 @@ function GridItem({ item, onPress, repostBadge }: { item: Post & { _repostedBy?:
   );
 }
 
+function CollectionsTab({ loading, items, onCreate, onOpen }: {
+  loading: boolean;
+  items?: { id: string; name: string; description: string | null; cover_url: string | null; item_count: number }[];
+  onCreate: () => void;
+  onOpen: (id: string, name: string) => void;
+}) {
+  if (loading) return <ActivityIndicator color={COLORS.primaryLight} style={{ marginTop: 40 }} />;
+  return (
+    <View>
+      <TouchableOpacity onPress={onCreate} activeOpacity={0.8} style={styles.collectionCreate}>
+        <Text style={styles.collectionCreateText}>+ Nouvelle collection</Text>
+      </TouchableOpacity>
+      {(!items || items.length === 0) ? (
+        <View style={styles.emptyWrap}>
+          <Text style={styles.emptyTitle}>Aucune collection</Text>
+          <Text style={styles.emptySubtitle}>Crée ta première collection pour organiser tes vidéos</Text>
+        </View>
+      ) : (
+        items.map((c) => (
+          <TouchableOpacity key={c.id} style={styles.collectionRow} onPress={() => onOpen(c.id, c.name)} activeOpacity={0.7}>
+            <View style={styles.collectionCover}>
+              {c.cover_url
+                ? <Image source={{ uri: c.cover_url }} style={styles.collectionCoverImg} />
+                : <View style={[styles.collectionCoverImg, { backgroundColor: COLORS.primaryBg, alignItems: 'center', justifyContent: 'center' }]}><IcHeart size={20} color={COLORS.primaryLight} /></View>
+              }
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.collectionName}>{c.name}</Text>
+              <Text style={styles.collectionMeta}>{c.item_count} vidéo{c.item_count !== 1 ? 's' : ''}</Text>
+            </View>
+          </TouchableOpacity>
+        ))
+      )}
+    </View>
+  );
+}
+
 function ThreadsTab({ threads, loading }: { threads?: Thread[]; loading: boolean }) {
-  if (loading) return <ActivityIndicator color={COLORS.primary} style={{ marginTop: 40 }} />;
+  if (loading) return <ActivityIndicator color={COLORS.primaryLight} style={{ marginTop: 40 }} />;
   if (!threads?.length) return <EmptyTab tab={1} />;
   return (
     <View>
       {threads.map((t) => (
         <View key={t.id} style={styles.threadItem}>
           <Text style={styles.threadContent}>{t.content}</Text>
-          <Text style={styles.threadMeta}>{t.like_count} j'aime · {t.reply_count} réponses</Text>
+          <Text style={styles.threadMeta}>{t.like_count} like · {t.reply_count} réponses</Text>
         </View>
       ))}
     </View>
@@ -410,7 +516,7 @@ function EmptyTab({ tab }: { tab: number }) {
   const msgs = [
     { title: 'Aucune vidéo', sub: 'Publiez votre première vidéo !' },
     { title: 'Aucun fil', sub: 'Partagez vos pensées !' },
-    { title: "Aucun j'aime", sub: 'Aimez des vidéos pour les retrouver ici' },
+    { title: "Aucun like", sub: 'Aimez des vidéos pour les retrouver ici' },
     { title: 'Aucun favori', sub: 'Sauvegardez du contenu pour le retrouver ici' },
   ];
   return (
@@ -442,7 +548,7 @@ const styles = StyleSheet.create({
 
   topBar: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: SPACING.md, paddingVertical: 10,
+    paddingHorizontal: SPACING.md, paddingVertical: 6,
     backgroundColor: COLORS.white, borderBottomWidth: 1, borderBottomColor: COLORS.borderLight,
   },
   topUsername: { fontSize: FONT.size.lg, fontWeight: FONT.weight.semibold, color: COLORS.text },
@@ -470,8 +576,16 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary, alignItems: 'center', justifyContent: 'center',
     borderWidth: 2, borderColor: COLORS.white,
   },
+  addStoryBadge: {
+    position: 'absolute', bottom: -2, right: -2,
+    width: 26, height: 26, borderRadius: 13,
+    backgroundColor: COLORS.primary, alignItems: 'center', justifyContent: 'center',
+    borderWidth: 2,
+  },
+  addStoryBadgeText: { color: COLORS.white, fontSize: 16, fontWeight: FONT.weight.bold, lineHeight: 18 },
 
   displayName: { fontSize: FONT.size.xxl, fontWeight: FONT.weight.bold, color: COLORS.text, letterSpacing: -0.3 },
+  username: { fontSize: FONT.size.sm, color: COLORS.textMuted, marginTop: -6 },
   bio: { fontSize: FONT.size.sm, color: COLORS.textMuted, textAlign: 'center', lineHeight: 20 },
 
   statsRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.lg, marginTop: 4 },
@@ -509,11 +623,13 @@ const styles = StyleSheet.create({
   gridThumb: { width: '100%', height: '100%' },
   gridThumbFallback: { backgroundColor: COLORS.primaryBg, alignItems: 'center', justifyContent: 'center' },
   gridOverlay: {
-    position: 'absolute', bottom: 0, left: 0, right: 0,
-    padding: 4, backgroundColor: 'rgba(0,0,0,0.35)',
+    position: 'absolute', bottom: 6, left: 6,
     flexDirection: 'row', alignItems: 'center', gap: 3,
   },
-  gridViews: { fontSize: FONT.size.xs, color: COLORS.white },
+  gridViews: {
+    fontSize: FONT.size.xs, color: COLORS.white, fontWeight: FONT.weight.semibold,
+    textShadowColor: 'rgba(0,0,0,0.6)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3,
+  },
   repostMini: {
     position: 'absolute', top: 4, left: 4,
     backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 6,
@@ -528,6 +644,13 @@ const styles = StyleSheet.create({
   threadMeta: { fontSize: FONT.size.xs, color: COLORS.textMuted, marginTop: 6 },
 
   emptyWrap: { alignItems: 'center', paddingVertical: 60, gap: 8 },
+  collectionCreate: { padding: 14, alignItems: 'center', backgroundColor: COLORS.primaryBg, marginHorizontal: 12, marginTop: 12, borderRadius: 12 },
+  collectionCreateText: { fontSize: 15, fontWeight: '600', color: COLORS.primary },
+  collectionRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 10, gap: 12 },
+  collectionCover: { width: 56, height: 56, borderRadius: 10, overflow: 'hidden' },
+  collectionCoverImg: { width: '100%', height: '100%' },
+  collectionName: { fontSize: 15, fontWeight: '600', color: '#111' },
+  collectionMeta: { fontSize: 12, color: '#888', marginTop: 2 },
   emptyTitle: { fontSize: FONT.size.lg, fontWeight: FONT.weight.semibold, color: COLORS.text },
   emptySubtitle: { fontSize: FONT.size.sm, color: COLORS.textMuted, textAlign: 'center', paddingHorizontal: SPACING.xl },
 });

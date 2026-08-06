@@ -1,7 +1,7 @@
 import { NavLink, Outlet } from 'react-router-dom';
 import {
   LayoutDashboard, Users, Film, Flag, MessageSquare,
-  LogOut, Activity, ChevronRight, ListTodo,
+  LogOut, Activity, ChevronRight, ListTodo, MessageCircle, Settings,
 } from 'lucide-react';
 import { useAuth } from '../stores/auth';
 import { cn } from '@/lib/utils';
@@ -11,8 +11,10 @@ const nav = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
   { to: '/users', label: 'Users', icon: Users },
   { to: '/posts', label: 'Posts', icon: Film },
+  { to: '/comments', label: 'Comments', icon: MessageCircle },
   { to: '/reports', label: 'Reports', icon: Flag },
   { to: '/tickets', label: 'Support', icon: MessageSquare },
+  { to: '/settings', label: 'Settings', icon: Settings },
   { to: '/roadmap', label: 'Roadmap', icon: ListTodo },
 ];
 

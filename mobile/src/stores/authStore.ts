@@ -8,12 +8,15 @@ export interface User {
   display_name: string;
   bio: string | null;
   avatar_url: string | null;
+  cover_url?: string | null;
   gender: 'MALE' | 'FEMALE';
   role: string;
   is_verified: boolean;
   follower_count: number;
   following_count: number;
   post_count: number;
+  like_count?: number;
+  profile_view_enabled?: boolean;
 }
 
 interface AuthStore {

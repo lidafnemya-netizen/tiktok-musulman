@@ -1,56 +1,60 @@
 import { useMemo } from 'react';
 import { useThemeStore } from '../stores/themeStore';
 
-// ── LIGHT — clean & premium (cream + Islamic green) ───────────────────────────
+// ── LIGHT — warm cream + deep forest green ─────────────────────────────────────
 const LIGHT = {
-  bg:              '#F7F7F8',
+  bg:              '#F4EFE3',
   surface:         '#FFFFFF',
   card:            '#FFFFFF',
-  inputBg:         '#F0F0F2',
-  text:            '#0A0A0B',
-  textMuted:       '#60646C',
-  textSubtle:      '#9EA3AB',
-  textPlaceholder: '#B8BCC4',
-  border:          '#E8E8EC',
-  borderLight:     '#F0F0F4',
+  inputBg:         '#EFE9DA',
+  text:            '#161A17',
+  textMuted:       '#666F67',
+  textSubtle:      '#9A9E93',
+  textPlaceholder: '#B3AD9C',
+  border:          '#E4DDC9',
+  borderLight:     '#EDE7D8',
   tabBg:           '#FFFFFF',
-  tabActive:       '#2D7A4F',
-  tabInactive:     '#9EA3AB',
-  navBorder:       '#EBEBEF',
-  primary:         '#2D7A4F',
-  primaryLight:    '#4CAF7A',
-  primaryBg:       '#EBF5EE',
+  tabActive:       '#1B3A2C',
+  tabInactive:     '#9A9E93',
+  navBorder:       '#EDE7D8',
+  primary:         '#1B3A2C',
+  primaryLight:    '#2D7A4F',
+  primaryBg:       '#E7F0EA',
+  accent:          '#C9A961',
+  accentBg:        '#FBF5E7',
 };
 
-// ── DARK — true black + green accent (TikTok-style) ───────────────────────────
+// ── DARK — deep forest black + gold accent ─────────────────────────────────────
 const DARK = {
-  bg:              '#0A0A0A',
-  surface:         '#111111',
-  card:            '#161616',
-  inputBg:         '#1C1C1C',
-  text:            '#F5F5F5',
-  textMuted:       '#A0A0A8',
-  textSubtle:      '#606068',
-  textPlaceholder: '#484850',
-  border:          '#222222',
-  borderLight:     '#1A1A1A',
-  tabBg:           '#0A0A0A',
-  tabActive:       '#4CAF7A',
-  tabInactive:     '#484850',
-  navBorder:       '#1A1A1A',
+  bg:              '#0D1F17',
+  surface:         '#123026',
+  card:            '#14332A',
+  inputBg:         '#1A3B2E',
+  text:            '#F0EAD9',
+  textMuted:       '#8FA396',
+  textSubtle:      '#5C6E63',
+  textPlaceholder: '#4A5C51',
+  border:          '#1E4536',
+  borderLight:     '#193629',
+  tabBg:           '#0D1F17',
+  tabActive:       '#C9A961',
+  tabInactive:     '#5C6E63',
+  navBorder:       '#193629',
   primary:         '#2D7A4F',
   primaryLight:    '#4CAF7A',
-  primaryBg:       '#0F2018',
+  primaryBg:       '#152E22',
+  accent:          '#C9A961',
+  accentBg:        '#1F3A2C',
 };
 
 // Shared static colors
 const STATIC = {
   white:   '#FFFFFF',
   black:   '#000000',
-  error:   '#EF4444',
+  error:   '#D64545',
   like:    '#FF3B5C',
-  gold:    '#C9A84C',
-  success: '#2D7A4F',
+  gold:    '#C9A961',
+  success: '#1B3A2C',
 };
 
 export type AppTheme = typeof LIGHT & typeof STATIC & { isDark: boolean };

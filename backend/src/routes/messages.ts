@@ -1,6 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { prisma } from '../config/database';
 import { authenticate } from '../middleware/auth';
+import { getUnseenStorySet } from '../lib/stories';
 import { z } from 'zod';
 
 const requestSchema = z.object({ recipient_id: z.string().uuid() });
@@ -168,12 +169,20 @@ export async function messageRoutes(app: FastifyInstance) {
       orderBy: { updated_at: 'desc' },
     });
 
-    const result = conversations.map((c) => ({
-      id: c.id,
-      other_user: c.request.requester_id === userId ? c.request.recipient : c.request.requester,
-      last_message: c.messages[0] ?? null,
-      updated_at: c.updated_at,
-    }));
+    const otherUserIds = conversations.map((c) =>
+      c.request.requester_id === userId ? c.request.recipient_id : c.request.requester_id
+    );
+    const unseenStories = await getUnseenStorySet(userId, otherUserIds);
+
+    const result = conversations.map((c) => {
+      const other = c.request.requester_id === userId ? c.request.recipient : c.request.requester;
+      return {
+        id: c.id,
+        other_user: { ...other, has_unseen_story: unseenStories.has(other.id) },
+        last_message: c.messages[0] ?? null,
+        updated_at: c.updated_at,
+      };
+    });
 
     return reply.send(result);
   });

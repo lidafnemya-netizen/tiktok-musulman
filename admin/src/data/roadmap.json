@@ -1,6 +1,6 @@
 {
-  "lastUpdated": "2026-06-04",
-  "version": "3.0",
+  "lastUpdated": "2026-08-06",
+  "version": "4.1",
   "items": [
     {
       "id": "1",
@@ -304,7 +304,7 @@
       "id": "26",
       "title": "Profil — liste followers/following cliquables",
       "description": "Tap compteur Abonnés → FollowersScreen liste, tap Abonnements → FollowingScreen — chaque user avec bouton Suivre/Ne plus suivre",
-      "status": "todo",
+      "status": "done",
       "priority": "medium",
       "category": "feature",
       "tags": [
@@ -317,7 +317,7 @@
       "id": "27",
       "title": "Backend — /users/:id/followers + /following",
       "description": "GET paginated avec cursor — chaque user inclut is_following boolean pour l'utilisateur connecté",
-      "status": "todo",
+      "status": "done",
       "priority": "medium",
       "category": "backend",
       "tags": [
@@ -364,7 +364,7 @@
       "id": "31",
       "title": "Backend — /search amélioré + hashtags",
       "description": "Recherche plein texte PostgreSQL tsvector sur captions + usernames. Index hashtags depuis captions. Endpoint /search?q= retourne { users[], posts[], hashtags[] }",
-      "status": "todo",
+      "status": "done",
       "priority": "medium",
       "category": "backend",
       "tags": [
@@ -376,7 +376,7 @@
       "id": "32",
       "title": "Hashtags — parsing cliquable + pages",
       "description": "Parser #hashtag dans captions/fils → TouchableOpacity vert → HashtagScreen (grille vidéos + compte publications)",
-      "status": "todo",
+      "status": "done",
       "priority": "medium",
       "category": "feature",
       "tags": [
@@ -400,7 +400,7 @@
       "id": "34",
       "title": "Messages — conversation temps réel Socket.io",
       "description": "ConversationScreen : envoi/réception instant via Socket.io, bulles chat (moi droite/autre gauche), scroll to bottom auto, indicateur typing, marquage lu",
-      "status": "todo",
+      "status": "done",
       "priority": "high",
       "category": "feature",
       "tags": [
@@ -413,7 +413,7 @@
       "id": "35",
       "title": "Backend — Socket.io messages",
       "description": "Events : message:send, message:received, conversation:typing, message:read — rooms isolées par conversation_id — auth JWT pour connexion socket",
-      "status": "todo",
+      "status": "done",
       "priority": "high",
       "category": "backend",
       "tags": [
@@ -425,7 +425,7 @@
       "id": "36",
       "title": "Messages — système demande de contact H/F",
       "description": "Onglet Demandes dans MessagesScreen — liste pending requests, bouton Accepter/Refuser. Règle : H ne peut PAS initier vers F sans demande acceptée (et vice versa). Interface d'envoi demande depuis profil",
-      "status": "todo",
+      "status": "done",
       "priority": "critical",
       "category": "feature",
       "tags": [
@@ -450,7 +450,7 @@
       "id": "38",
       "title": "Backend — /users/me/settings",
       "description": "Table user_settings — GET retourne tous les params, PATCH met à jour champs envoyés. Paramètres : notifications_enabled, account_private, show_activity, allow_dm_requests",
-      "status": "todo",
+      "status": "done",
       "priority": "medium",
       "category": "backend",
       "tags": [
@@ -473,7 +473,7 @@
       "id": "40",
       "title": "Backend — système notifications in-app",
       "description": "Table notifications (user_id, type, actor_id, post_id, read_at) — créée automatiquement à chaque like/comment/follow/mention. GET /notifications + POST /notifications/read-all",
-      "status": "todo",
+      "status": "done",
       "priority": "medium",
       "category": "backend",
       "tags": [
@@ -484,7 +484,7 @@
     {
       "id": "41",
       "title": "Notifications push APNs/FCM",
-      "description": "Intégration Firebase — enregistrement token au login, envoi push sur like/comment/follow/message — background + foreground handling, deep link vers écran concerné",
+      "description": "BLOQUÉ — nécessite comptes Apple Developer (APNs certs) + Firebase (FCM), config native hors scope automatisable.",
       "status": "todo",
       "priority": "medium",
       "category": "feature",
@@ -498,7 +498,7 @@
       "id": "42",
       "title": "Commentaires — bottom sheet TikTok-style",
       "description": "Remplacer PostDetailScreen plein écran par un BottomSheet draggable sur la vidéo — commentaires sans quitter le feed — hauteur 70% écran, handleIndicator en haut",
-      "status": "todo",
+      "status": "done",
       "priority": "high",
       "category": "feature",
       "tags": [
@@ -510,7 +510,7 @@
       "id": "43",
       "title": "Commentaires — réponses imbriquées",
       "description": "Tap 'Répondre' sous un commentaire → champ reply pré-rempli @username. Affichage replies en accordéon. GET /comments/:id/replies",
-      "status": "todo",
+      "status": "done",
       "priority": "medium",
       "category": "feature",
       "tags": [
@@ -546,7 +546,7 @@
       "id": "46",
       "title": "Blocage utilisateurs",
       "description": "Option Bloquer depuis profil utilisateur — POST /users/:id/block — l'utilisateur bloqué disparaît du feed, explorer et messages",
-      "status": "todo",
+      "status": "done",
       "priority": "high",
       "category": "feature",
       "tags": [
@@ -558,7 +558,7 @@
       "id": "47",
       "title": "Backend — /reports + /users/:id/block",
       "description": "Table reports (reporter_id, target_type, target_id, reason). Table blocked_users. Filtre automatique dans feed + messages pour bloqeurs/bloqués",
-      "status": "todo",
+      "status": "done",
       "priority": "high",
       "category": "backend",
       "tags": [
@@ -570,7 +570,7 @@
       "id": "48",
       "title": "Fils — ThreadDetailScreen avec réponses",
       "description": "Tap un thread → ThreadDetailScreen : fil principal en haut, liste réponses dessous, composer reply épinglé en bas, @mention auto",
-      "status": "todo",
+      "status": "done",
       "priority": "medium",
       "category": "feature",
       "tags": [
@@ -582,7 +582,7 @@
       "id": "49",
       "title": "Fils — repost + citation",
       "description": "Bouton repost sur un fil → repost direct (compte incrémenté) ou quote (composer pré-rempli avec contenu cité, type='quote')",
-      "status": "todo",
+      "status": "done",
       "priority": "low",
       "category": "feature",
       "tags": [
@@ -604,7 +604,7 @@
     {
       "id": "51",
       "title": "Compression vidéo + progress upload",
-      "description": "react-native-compressor avant envoi — barre progression réelle (onUploadProgress axios) — bouton annuler, retry sur échec réseau",
+      "description": "PARTIEL — progress upload déjà fonctionnel ; compression vidéo nécessite lib native (ffmpeg-kit), reporté.",
       "status": "todo",
       "priority": "medium",
       "category": "feature",
@@ -629,7 +629,7 @@
       "id": "53",
       "title": "Stories — 24h (cercle avatar)",
       "description": "Upload photo/vidéo courte → expire après 24h. Cercles avatars scrollables horizontalement en haut du feed Fils. Viewer plein écran avec progress bar multi-segments",
-      "status": "todo",
+      "status": "done",
       "priority": "low",
       "category": "feature",
       "tags": [
@@ -640,7 +640,7 @@
     {
       "id": "54",
       "title": "Duos / Stitch TikTok-style",
-      "description": "Bouton Duo depuis options vidéo → enregistrement caméra côte à côte avec la vidéo originale — référence original_post_id",
+      "description": "BLOQUÉ — Duet/Stitch nécessite compositing vidéo natif (FFmpeg/native module), risqué sans environnement de test dédié.",
       "status": "todo",
       "priority": "low",
       "category": "feature",
@@ -653,7 +653,7 @@
       "id": "55",
       "title": "Badge vérification compte",
       "description": "Workflow : bouton Demander vérification dans Settings → admin approuve → badge ✓ vert sur profil + fils + overlay vidéo",
-      "status": "todo",
+      "status": "done",
       "priority": "low",
       "category": "feature",
       "tags": [
@@ -665,7 +665,7 @@
       "id": "56",
       "title": "Admin — dashboard métriques",
       "description": "Graphiques Recharts : vues/jour, uploads/jour, utilisateurs actifs, top catégories, taux rétention 7j/30j, map géographique si dispo",
-      "status": "todo",
+      "status": "done",
       "priority": "low",
       "category": "admin",
       "tags": [
@@ -677,7 +677,7 @@
       "id": "57",
       "title": "Admin — modération signalements",
       "description": "Liste signalements avec filtres statut, type de contenu — actions : Bannir compte / Avertir / Supprimer contenu / Rejeter signalement — log audit",
-      "status": "todo",
+      "status": "done",
       "priority": "high",
       "category": "admin",
       "tags": [
@@ -689,7 +689,7 @@
       "id": "58",
       "title": "Admin — gestion utilisateurs",
       "description": "Table users avec filtres (vérifié, banni, date inscription) — profil détail — actions ban/dé-ban/vérifier/promouvoir modérateur",
-      "status": "todo",
+      "status": "done",
       "priority": "medium",
       "category": "admin",
       "tags": [
@@ -699,7 +699,7 @@
     {
       "id": "59",
       "title": "Build iOS — TestFlight beta",
-      "description": "Archive Xcode + certificat distribution + provisioning profile → soumission TestFlight — lien beta partageable",
+      "description": "BLOQUÉ — nécessite compte Apple Developer payant + App Store Connect, action manuelle utilisateur requise.",
       "status": "todo",
       "priority": "high",
       "category": "infra",
@@ -712,7 +712,7 @@
     {
       "id": "60",
       "title": "Build Android — APK signé / Play Store",
-      "description": "keystore + gradlew assembleRelease + signed APK → soumission Google Play interne test track",
+      "description": "BLOQUÉ — nécessite compte Google Play Console, action manuelle utilisateur requise.",
       "status": "todo",
       "priority": "high",
       "category": "infra",
@@ -725,7 +725,7 @@
     {
       "id": "61",
       "title": "Sélection de son à l'upload",
-      "description": "BottomSheet de sélection de son : favoris utilisateur, sons récents, tendances. Ajout audio sur la vidéo via Cloudinary audio overlay ou metadata",
+      "description": "EN PAUSE — contradictoire avec la demande explicite de retirer l'UI son des vidéos (icône son/x1 supprimée sur demande).",
       "status": "todo",
       "priority": "high",
       "category": "feature",
@@ -739,7 +739,7 @@
       "id": "62",
       "title": "Son — page dédiée avec vraies stats",
       "description": "SoundScreen : vrai count utilisation depuis DB, liste complète des vidéos utilisant ce son, bouton Ajouter à mes favoris sons",
-      "status": "todo",
+      "status": "done",
       "priority": "medium",
       "category": "feature",
       "tags": [
@@ -752,7 +752,7 @@
       "id": "63",
       "title": "Signalement — backend route /reports",
       "description": "POST /reports avec rate limiting, table reports, admin workflow",
-      "status": "todo",
+      "status": "done",
       "priority": "high",
       "category": "backend",
       "tags": [
@@ -764,7 +764,7 @@
       "id": "64",
       "title": "Blocage — backend route /users/:id/block",
       "description": "POST toggle block/unblock, filtrage dans feed et messages pour utilisateurs bloqués",
-      "status": "todo",
+      "status": "done",
       "priority": "high",
       "category": "backend",
       "tags": [
@@ -776,7 +776,7 @@
       "id": "65",
       "title": "Fils — réponses imbriquées (ThreadDetail)",
       "description": "ThreadDetailScreen : fil principal + réponses en thread, composer reply, @mention auto",
-      "status": "todo",
+      "status": "done",
       "priority": "medium",
       "category": "feature",
       "tags": [
@@ -788,7 +788,7 @@
       "id": "66",
       "title": "Messages — envoi de médias",
       "description": "Envoyer images et vidéos dans les conversations, affichage bulle avec miniature",
-      "status": "todo",
+      "status": "done",
       "priority": "medium",
       "category": "feature",
       "tags": [
@@ -800,7 +800,7 @@
       "id": "67",
       "title": "Feed — infinite scroll optimisé + preload",
       "description": "Preload des 2 prochaines vidéos, gestion mémoire (unload vidéos loin du viewport)",
-      "status": "todo",
+      "status": "done",
       "priority": "high",
       "category": "performance",
       "tags": [
@@ -813,7 +813,7 @@
       "id": "68",
       "title": "Onboarding 3 écrans au premier lancement",
       "description": "Splash values + règles messagerie + sélection catégories préférées → AsyncStorage flag",
-      "status": "todo",
+      "status": "done",
       "priority": "medium",
       "category": "feature",
       "tags": [
@@ -825,7 +825,7 @@
       "id": "69",
       "title": "Profil — bannière de couverture",
       "description": "Image de couverture en haut du profil (comme Instagram) — upload et affichage",
-      "status": "todo",
+      "status": "done",
       "priority": "low",
       "category": "feature",
       "tags": [
@@ -836,7 +836,7 @@
     {
       "id": "70",
       "title": "Build TestFlight — distribution beta",
-      "description": "Archive Xcode + certificat distribution + soumission TestFlight — lien beta partageable",
+      "description": "BLOQUÉ — nécessite soumission App Store Connect, action manuelle utilisateur requise.",
       "status": "todo",
       "priority": "high",
       "category": "infra",
@@ -844,6 +844,485 @@
         "mobile",
         "infra",
         "release"
+      ]
+    },
+    {
+      "id": "71",
+      "title": "Theme design system image 1 (light) + image 2 (dark)",
+      "description": "BLOQUÉ — images 1 (thème clair) et 2 (thème sombre) jamais reçues, en attente utilisateur.",
+      "status": "todo",
+      "priority": "high",
+      "category": "design",
+      "tags": [
+        "mobile",
+        "admin",
+        "theme"
+      ]
+    },
+    {
+      "id": "72",
+      "title": "Admin UI refonte + modules complets",
+      "description": "Modules stats, users, posts, comments, support, admins, settings",
+      "status": "in_progress",
+      "priority": "high",
+      "category": "admin",
+      "tags": [
+        "admin"
+      ]
+    },
+    {
+      "id": "73",
+      "title": "Ajouter des admins depuis site admin",
+      "description": "Promote users to ADMIN role",
+      "status": "done",
+      "priority": "medium",
+      "category": "admin",
+      "tags": [
+        "admin"
+      ]
+    },
+    {
+      "id": "74",
+      "title": "Change photo profil depuis modifier profil",
+      "description": "Bouton upload avatar",
+      "status": "done",
+      "priority": "medium",
+      "category": "mobile",
+      "tags": [
+        "mobile",
+        "profile"
+      ]
+    },
+    {
+      "id": "75",
+      "title": "Header conversation DM affiche pseudo destinataire",
+      "description": "Show display_name",
+      "status": "done",
+      "priority": "medium",
+      "category": "mobile",
+      "tags": [
+        "mobile",
+        "messages"
+      ]
+    },
+    {
+      "id": "76",
+      "title": "Pour toi affiche display_name (pas @username)",
+      "description": "Feed display name",
+      "status": "done",
+      "priority": "medium",
+      "category": "mobile",
+      "tags": [
+        "mobile",
+        "feed"
+      ]
+    },
+    {
+      "id": "77",
+      "title": "Publier: onglet Photo + multi-photos galerie",
+      "description": "Multi-select images upload",
+      "status": "done",
+      "priority": "high",
+      "category": "mobile",
+      "tags": [
+        "mobile",
+        "upload"
+      ]
+    },
+    {
+      "id": "78",
+      "title": "Fix bug description publication",
+      "description": "Cannot type caption",
+      "status": "done",
+      "priority": "high",
+      "category": "mobile",
+      "tags": [
+        "mobile",
+        "upload",
+        "bug"
+      ]
+    },
+    {
+      "id": "79",
+      "title": "Retirer icon son et badge x1 dans Pour toi",
+      "description": "Hidden per design",
+      "status": "done",
+      "priority": "medium",
+      "category": "mobile",
+      "tags": [
+        "mobile",
+        "feed"
+      ]
+    },
+    {
+      "id": "80",
+      "title": "Recadrer boutons profil/like/comment/share centre-droit",
+      "description": "Position adjustment",
+      "status": "done",
+      "priority": "medium",
+      "category": "mobile",
+      "tags": [
+        "mobile",
+        "feed"
+      ]
+    },
+    {
+      "id": "81",
+      "title": "Long-press video: sheet republier/partager",
+      "description": "Bottom sheet on long press",
+      "status": "done",
+      "priority": "medium",
+      "category": "mobile",
+      "tags": [
+        "mobile",
+        "feed"
+      ]
+    },
+    {
+      "id": "82",
+      "title": "Comments sheet: swipe down to close",
+      "description": "Drag to dismiss",
+      "status": "done",
+      "priority": "medium",
+      "category": "mobile",
+      "tags": [
+        "mobile",
+        "comments"
+      ]
+    },
+    {
+      "id": "83",
+      "title": "Profil: swipe pour défiler ses propres vidéos",
+      "description": "Vertical swipe navigation",
+      "status": "done",
+      "priority": "medium",
+      "category": "mobile",
+      "tags": [
+        "mobile",
+        "profile"
+      ]
+    },
+    {
+      "id": "84",
+      "title": "Publier: label pourtoi (pas feed), like (pas j'aime)",
+      "description": "Label rename",
+      "status": "done",
+      "priority": "low",
+      "category": "mobile",
+      "tags": [
+        "mobile",
+        "ui"
+      ]
+    },
+    {
+      "id": "85",
+      "title": "Profil: retirer bouton appareil photo au-dessus avatar",
+      "description": "Remove camera CTA",
+      "status": "done",
+      "priority": "low",
+      "category": "mobile",
+      "tags": [
+        "mobile",
+        "profile"
+      ]
+    },
+    {
+      "id": "86",
+      "title": "Fils/threads: multi-photos",
+      "description": "Multiple images in threads",
+      "status": "done",
+      "priority": "medium",
+      "category": "mobile",
+      "tags": [
+        "mobile",
+        "threads"
+      ]
+    },
+    {
+      "id": "87",
+      "title": "Recadrer live/vidéo Pour toi (overflow live)",
+      "description": "Fix live overflow next video",
+      "status": "done",
+      "priority": "high",
+      "category": "mobile",
+      "tags": [
+        "mobile",
+        "feed",
+        "live"
+      ]
+    },
+    {
+      "id": "88",
+      "title": "Notifications: afficher pseudo par notif",
+      "description": "Show display_name in each notif",
+      "status": "done",
+      "priority": "medium",
+      "category": "mobile",
+      "tags": [
+        "mobile",
+        "notifications"
+      ]
+    },
+    {
+      "id": "89",
+      "title": "Pour toi: exclure ses propres vidéos",
+      "description": "Filter own posts feed",
+      "status": "done",
+      "priority": "medium",
+      "category": "backend",
+      "tags": [
+        "backend",
+        "feed"
+      ]
+    },
+    {
+      "id": "90",
+      "title": "Profil: retirer onglet notification",
+      "description": "Remove notif tab from profile screen",
+      "status": "done",
+      "priority": "low",
+      "category": "mobile",
+      "tags": [
+        "mobile",
+        "profile"
+      ]
+    },
+    {
+      "id": "91",
+      "title": "Favoris: onglets Vidéos / Sons / Collections",
+      "description": "Tabbed favorites",
+      "status": "done",
+      "priority": "medium",
+      "category": "mobile",
+      "tags": [
+        "mobile",
+        "favorites"
+      ]
+    },
+    {
+      "id": "92",
+      "title": "Favoris: créer collections + ajouter vidéos",
+      "description": "User collections CRUD",
+      "status": "done",
+      "priority": "medium",
+      "category": "mobile",
+      "tags": [
+        "mobile",
+        "favorites",
+        "backend"
+      ]
+    },
+    {
+      "id": "93",
+      "title": "Messagerie: story via + top-left",
+      "description": "Add story from message tab",
+      "status": "done",
+      "priority": "medium",
+      "category": "mobile",
+      "tags": [
+        "mobile",
+        "messages",
+        "stories"
+      ]
+    },
+    {
+      "id": "94",
+      "title": "Like unique par user (contrainte DB)",
+      "description": "Enforce unique like",
+      "status": "done",
+      "priority": "critical",
+      "category": "backend",
+      "tags": [
+        "backend"
+      ]
+    },
+    {
+      "id": "95",
+      "title": "Favorite unique par user (contrainte DB)",
+      "description": "Enforce unique favorite",
+      "status": "done",
+      "priority": "critical",
+      "category": "backend",
+      "tags": [
+        "backend"
+      ]
+    },
+    {
+      "id": "96",
+      "title": "View unique par user (compteur incrémente 1x)",
+      "description": "Fix double view increment",
+      "status": "done",
+      "priority": "critical",
+      "category": "backend",
+      "tags": [
+        "backend",
+        "bug"
+      ]
+    },
+    {
+      "id": "97",
+      "title": "Admin: module Comments (list/delete)",
+      "description": "CRUD comments moderation",
+      "status": "done",
+      "priority": "medium",
+      "category": "admin",
+      "tags": [
+        "admin"
+      ]
+    },
+    {
+      "id": "98",
+      "title": "Admin: module Settings (feature flags, version)",
+      "description": "Global app settings page",
+      "status": "done",
+      "priority": "medium",
+      "category": "admin",
+      "tags": [
+        "admin"
+      ]
+    },
+    {
+      "id": "99",
+      "title": "Collections backend: CRUD + items",
+      "description": "Collection/CollectionItem models + routes",
+      "status": "done",
+      "priority": "medium",
+      "category": "backend",
+      "tags": [
+        "backend"
+      ]
+    },
+    {
+      "id": "100",
+      "title": "Threads: media_urls multi-photos backend+mobile",
+      "description": "Post.media_urls array field, composer multi-select",
+      "status": "done",
+      "priority": "medium",
+      "category": "backend",
+      "tags": [
+        "backend",
+        "mobile"
+      ]
+    },
+    {
+      "id": "101",
+      "title": "Feed live card height fix (overflow into next video)",
+      "description": "Pass ITEM_H explicit height instead of window height",
+      "status": "done",
+      "priority": "high",
+      "category": "mobile",
+      "tags": [
+        "mobile",
+        "bug"
+      ]
+    },
+    {
+      "id": "102",
+      "title": "Fils: affichage images multi-photos",
+      "description": "ThreadCard render thumbnail_url + media_urls as horizontal scroll",
+      "status": "done",
+      "priority": "medium",
+      "category": "mobile",
+      "tags": [
+        "mobile",
+        "threads"
+      ]
+    },
+    {
+      "id": "103",
+      "title": "Ajouter vidéo à une collection depuis ShareSheet",
+      "description": "Long-press video -> ShareSheet -> Ajouter à une collection",
+      "status": "done",
+      "priority": "medium",
+      "category": "mobile",
+      "tags": [
+        "mobile",
+        "favorites"
+      ]
+    },
+    {
+      "id": "104",
+      "title": "Modifier profil: uploader photo de couverture",
+      "description": "Bannière au-dessus de la photo de profil, upload depuis Modifier le profil",
+      "status": "done",
+      "priority": "medium",
+      "category": "mobile",
+      "tags": [
+        "mobile",
+        "profile"
+      ]
+    },
+    {
+      "id": "105",
+      "title": "Changelog v2.3.0 — journal de version mis à jour",
+      "description": "Nouvelle entrée changelog avec date/heure réelles (2026-08-03 14h10), version bumped 2.2.0 -> 2.3.0 (package.json + Xcode MARKETING_VERSION + build 6)",
+      "status": "done",
+      "priority": "low",
+      "category": "mobile",
+      "tags": [
+        "mobile",
+        "release"
+      ]
+    },
+    {
+      "id": "106",
+      "title": "Fils/threads: bouton republier fonctionnel",
+      "description": "Wire IcShare button to POST /posts/:id/repost (threads are Posts under the hood), affiche repost_count + état actif",
+      "status": "done",
+      "priority": "medium",
+      "category": "mobile",
+      "tags": [
+        "mobile",
+        "threads"
+      ]
+    },
+    {
+      "id": "107",
+      "title": "Backend: is_reposted dans GET /threads",
+      "description": "Ajout du flag is_reposted par thread pour état visuel du bouton repost",
+      "status": "done",
+      "priority": "medium",
+      "category": "backend",
+      "tags": [
+        "backend",
+        "threads"
+      ]
+    },
+    {
+      "id": "108",
+      "title": "Messages: envoi de photo",
+      "description": "Bouton trombone dans la conversation, upload + media_url, bulle image affichée",
+      "status": "done",
+      "priority": "medium",
+      "category": "mobile",
+      "tags": [
+        "mobile",
+        "messages"
+      ]
+    },
+    {
+      "id": "109",
+      "title": "Comments sheet: swipe-down depuis toute la liste",
+      "description": "PanResponder sur la FlatList (actif seulement en haut de liste) en plus du handle",
+      "status": "done",
+      "priority": "medium",
+      "category": "mobile",
+      "tags": [
+        "mobile",
+        "comments"
+      ]
+    },
+    {
+      "id": "110",
+      "title": "Refonte DA complète — cream/forest green (light) + deep forest/gold (dark)",
+      "description": "Nouveaux tokens COLORS/RADIUS/SHADOW + useTheme LIGHT/DARK calqués sur maquettes fournies. Cascade sur 68 fichiers via tokens partagés. Fix contraste icônes (chips vert invisible en dark -> theme.tabActive vert/or). Vérifié visuellement sur Feed/Profil/Paramètres en light+dark via simulateur.",
+      "status": "done",
+      "priority": "high",
+      "category": "design",
+      "tags": [
+        "mobile",
+        "theme",
+        "da"
       ]
     }
   ]

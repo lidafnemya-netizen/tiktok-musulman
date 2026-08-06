@@ -3,63 +3,65 @@ import { Dimensions, Platform } from 'react-native';
 export const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 // ─── BRAND COLORS ─────────────────────────────────────────────────────────────
+// Reference DA: warm cream + deep forest green (light) / deep forest black + gold (dark)
 export const COLORS = {
-  // Primary — deep Islamic green
-  primary: '#2D7A4F',
-  primaryLight: '#4CAF7A',
-  primaryDark: '#1E5235',
-  primaryBg: '#EBF5EE',
-  primaryBgDark: '#1A3025',
+  // Primary — deep forest green
+  primary: '#1B3A2C',
+  primaryLight: '#2D7A4F',
+  primaryDark: '#122A20',
+  primaryBg: '#E7F0EA',
+  primaryBgDark: '#152E22',
 
-  // Accent — warm gold / sand
-  gold: '#C9A84C',
-  goldLight: '#E8D5A3',
-  goldBg: '#FDF8EC',
+  // Accent — warm gold (dark-mode hero accent + highlights)
+  gold: '#C9A961',
+  goldLight: '#DDC188',
+  goldDark: '#A6863F',
+  goldBg: '#FBF5E7',
 
-  // Backgrounds (light mode)
-  bg: '#FAF8F3',
+  // Backgrounds (light mode) — warm cream, not neutral grey
+  bg: '#F4EFE3',
   surface: '#FFFFFF',
   card: '#FFFFFF',
-  inputBg: '#F4F1EB',
+  inputBg: '#EFE9DA',
 
-  // Backgrounds (dark mode)
-  bgDark: '#0F1A13',
-  surfaceDark: '#18291E',
-  cardDark: '#1E3326',
-  inputBgDark: '#243B2A',
+  // Backgrounds (dark mode) — deep forest, not true black
+  bgDark: '#0D1F17',
+  surfaceDark: '#123026',
+  cardDark: '#14332A',
+  inputBgDark: '#1A3B2E',
 
   // Text (light mode)
-  text: '#1C1C1E',
-  textMuted: '#6B7280',
-  textSubtle: '#9CA3AF',
-  textPlaceholder: '#B0A99A',
+  text: '#161A17',
+  textMuted: '#666F67',
+  textSubtle: '#9A9E93',
+  textPlaceholder: '#B3AD9C',
 
   // Text (dark mode)
-  textDark: '#F5F3EE',
-  textMutedDark: '#9BA8A0',
+  textDark: '#F0EAD9',
+  textMutedDark: '#8FA396',
 
   // Borders
-  border: '#EAE7DE',
-  borderDark: '#2A4035',
-  borderLight: '#F0EDE5',
+  border: '#E4DDC9',
+  borderDark: '#1E4536',
+  borderLight: '#EDE7D8',
 
   // Semantic
-  like: '#E05252',
-  likeBg: '#FEF2F2',
-  success: '#2D7A4F',
-  warning: '#F59E0B',
-  error: '#EF4444',
+  like: '#E0524F',
+  likeBg: '#FCEEED',
+  success: '#1B3A2C',
+  warning: '#C9A961',
+  error: '#D64545',
 
   // Misc
   white: '#FFFFFF',
   black: '#000000',
-  overlay: 'rgba(0,0,0,0.45)',
-  overlayLight: 'rgba(0,0,0,0.15)',
+  overlay: 'rgba(11,22,17,0.5)',
+  overlayLight: 'rgba(11,22,17,0.15)',
   transparent: 'transparent',
 
   // Tab bar
-  tabActive: '#2D7A4F',
-  tabInactive: '#9CA3AF',
+  tabActive: '#1B3A2C',
+  tabInactive: '#9A9E93',
 };
 
 // ─── SPACING ──────────────────────────────────────────────────────────────────
@@ -74,11 +76,11 @@ export const SPACING = {
 
 // ─── BORDER RADIUS ────────────────────────────────────────────────────────────
 export const RADIUS = {
-  xs: 4,
-  sm: 8,
-  md: 12,
-  lg: 16,
-  xl: 24,
+  xs: 6,
+  sm: 10,
+  md: 14,
+  lg: 20,
+  xl: 28,
   full: 999,
 };
 
@@ -108,35 +110,42 @@ export const FONT = {
 // ─── SHADOWS ──────────────────────────────────────────────────────────────────
 export const SHADOW = {
   sm: {
-    shadowColor: '#000',
+    shadowColor: '#0B1611',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
     elevation: 2,
   },
   md: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
+    shadowColor: '#0B1611',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.07,
+    shadowRadius: 10,
     elevation: 4,
   },
   lg: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 16,
+    shadowColor: '#0B1611',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
     elevation: 8,
   },
   green: {
-    shadowColor: '#2D7A4F',
+    shadowColor: '#1B3A2C',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
+    shadowOpacity: 0.22,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  gold: {
+    shadowColor: '#C9A961',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.22,
     shadowRadius: 12,
     elevation: 6,
   },
 };
 
 // ─── API ──────────────────────────────────────────────────────────────────────
-export const API_BASE_URL = 'https://tiktok-backend-production-2cd7.up.railway.app/api';
-export const WS_URL = 'https://tiktok-backend-production-2cd7.up.railway.app';
+export const API_BASE_URL = 'https://tiktok-musulman-backend.onrender.com/api';
+export const WS_URL = 'https://tiktok-musulman-backend.onrender.com';

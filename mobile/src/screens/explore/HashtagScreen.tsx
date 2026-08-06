@@ -68,7 +68,7 @@ export default function HashtagScreen({ route, navigation }: Props) {
 
       {isLoading ? (
         <View style={styles.center}>
-          <ActivityIndicator color={COLORS.primary} size="large" />
+          <ActivityIndicator color={COLORS.primaryLight} size="large" />
         </View>
       ) : (
         <FlatList

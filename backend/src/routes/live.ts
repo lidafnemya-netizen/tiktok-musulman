@@ -27,7 +27,7 @@ export async function liveRoutes(app: FastifyInstance) {
       include: { user: { select: U } },
     });
 
-    const followers = await prisma.follow.findMany({ where: { following_id: req.currentUser!.id }, select: { follower_id: true } });
+    const followers = await prisma.follow.findMany({ where: { following_id: req.currentUser!.id, notify_live: true }, select: { follower_id: true } });
     if (followers.length > 0) {
       await prisma.notification.createMany({
         data: followers.map(f => ({

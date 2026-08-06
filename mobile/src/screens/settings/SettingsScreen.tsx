@@ -17,7 +17,7 @@ import { RootStackParamList } from '../../navigation';
 import { COLORS, FONT, SPACING, RADIUS, SHADOW } from '../../constants/theme';
 import {
   IcEdit, IcMail, IcShield, IcLock, IcBell, IcUsers, IcGlobe,
-  IcMoon, IcHelp, IcLogOut, IcVideo, IcStar, IcFlag, IcInfo,
+  IcMoon, IcSun, IcSettings, IcHelp, IcLogOut, IcVideo, IcStar, IcFlag, IcInfo,
   IcCheck, IcProfile, IcBack, IcClose,
 } from '../../components/ui/Icons';
 
@@ -58,8 +58,8 @@ function Row({
       disabled={!onPress && right === undefined}
     >
       <View style={rStyles.rowLeft}>
-        <View style={[rStyles.rowIcon, { backgroundColor: theme.primaryBg }]}>
-          <Icon size={17} color={destructive ? COLORS.error : COLORS.primary} strokeWidth={1.8} />
+        <View style={[rStyles.rowIcon, { backgroundColor: destructive ? COLORS.likeBg : theme.primaryBg }]}>
+          <Icon size={17} color={destructive ? COLORS.error : theme.tabActive} strokeWidth={1.8} />
         </View>
         <Text style={[rStyles.rowLabel, { color: destructive ? COLORS.error : theme.text }]}>{label}</Text>
       </View>
@@ -267,12 +267,15 @@ export default function SettingsScreen({ navigation }: Props) {
               <Text style={[rStyles.rowLabel, { color: theme.text }]}>Thème</Text>
             </View>
             <View style={styles.themeButtons}>
-              {(['light','dark','system'] as const).map(m => (
+              {([
+                ['light', 'Clair', IcSun],
+                ['dark', 'Sombre', IcMoon],
+                ['system', 'Auto', IcSettings],
+              ] as const).map(([m, label, ModeIcon]) => (
                 <TouchableOpacity key={m} style={[styles.themeBtn, mode === m && { backgroundColor: COLORS.primary, borderColor: COLORS.primary }]}
                   onPress={() => setMode(m)} activeOpacity={0.8}>
-                  <Text style={[styles.themeBtnText, mode === m && { color: COLORS.white }]}>
-                    {m === 'light' ? '☀️ Clair' : m === 'dark' ? '🌙 Sombre' : '📱 Auto'}
-                  </Text>
+                  <ModeIcon size={13} color={mode === m ? COLORS.white : theme.textMuted} strokeWidth={1.8} />
+                  <Text style={[styles.themeBtnText, mode === m && { color: COLORS.white }]}>{label}</Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -302,14 +305,14 @@ export default function SettingsScreen({ navigation }: Props) {
 const rStyles = StyleSheet.create({
   section: { gap: 6 },
   sectionTitle: { fontSize: FONT.size.xs, fontWeight: FONT.weight.semibold, letterSpacing: 1, paddingHorizontal: 4 },
-  sectionCard: { borderRadius: RADIUS.lg, borderWidth: 1, overflow: 'hidden', ...SHADOW.sm },
+  sectionCard: { borderRadius: RADIUS.lg, borderWidth: 1, overflow: 'hidden' },
   row: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: SPACING.md, paddingVertical: 13, borderBottomWidth: 1,
   },
   rowLast: { borderBottomWidth: 0 },
   rowLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
-  rowIcon: { width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  rowIcon: { width: 38, height: 38, borderRadius: RADIUS.sm, alignItems: 'center', justifyContent: 'center' },
   rowLabel: { fontSize: FONT.size.base },
   rowRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   rowValue: { fontSize: FONT.size.sm },
@@ -343,6 +346,7 @@ const styles = StyleSheet.create({
   deleteBtnText: { fontSize: FONT.size.sm, color: COLORS.textSubtle, textDecorationLine: 'underline' },
   themeButtons: { flexDirection: 'row', gap: 6 },
   themeBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
     paddingHorizontal: 10, paddingVertical: 6, borderRadius: RADIUS.full,
     borderWidth: 1.5, borderColor: COLORS.border,
   },

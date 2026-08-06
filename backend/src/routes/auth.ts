@@ -136,18 +136,19 @@ export async function authRoutes(app: FastifyInstance) {
 
   app.get('/me', { preHandler: authenticate }, async (req, reply) => {
     const userId = req.currentUser!.id;
-    const [user, followerCount, followingCount, postCount] = await Promise.all([
+    const [user, followerCount, followingCount, postCount, likeSum] = await Promise.all([
       prisma.user.findUnique({
         where: { id: userId },
         select: {
           id: true, username: true, email: true, display_name: true,
-          bio: true, avatar_url: true, gender: true, role: true,
-          is_verified: true, like_count: true, created_at: true,
+          bio: true, avatar_url: true, cover_url: true, gender: true, role: true,
+          is_verified: true, created_at: true, profile_view_enabled: true,
         },
       }),
       prisma.follow.count({ where: { following_id: userId } }),
       prisma.follow.count({ where: { follower_id: userId } }),
       prisma.post.count({ where: { user_id: userId, status: 'ACTIVE' } }),
+      prisma.post.aggregate({ where: { user_id: userId, status: 'ACTIVE', is_thread: false }, _sum: { like_count: true } }),
     ]);
 
     // Sync denormalized counts
@@ -158,6 +159,9 @@ export async function authRoutes(app: FastifyInstance) {
       }).catch(() => {});
     }
 
-    return reply.send({ ...user, follower_count: followerCount, following_count: followingCount, post_count: postCount });
+    return reply.send({
+      ...user, follower_count: followerCount, following_count: followingCount, post_count: postCount,
+      like_count: likeSum._sum.like_count ?? 0,
+    });
   });
 }

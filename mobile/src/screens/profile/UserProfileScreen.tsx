@@ -3,7 +3,7 @@ import { createThumbnail } from 'react-native-create-thumbnail';
 import {
   View, Text, StyleSheet, Image, TouchableOpacity,
   FlatList, ActivityIndicator, Alert, Dimensions, ActionSheetIOS, Platform,
-  Share, Linking,
+  Share, Linking, Modal, Switch,
 } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -13,7 +13,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { useTheme } from '../../hooks/useTheme';
 import { api } from '../../api/client';
 import { COLORS, FONT, SPACING, RADIUS, SHADOW } from '../../constants/theme';
-import { IcBack, IcFollow, IcFollowing, IcMail, IcHeart, IcPlay, IcCheck, IcMore, IcShare, IcRepeat } from '../../components/ui/Icons';
+import { IcBack, IcFollow, IcFollowing, IcMail, IcHeart, IcPlay, IcCheck, IcMore, IcShare, IcRepeat, IcEye, IcBell, IcClose } from '../../components/ui/Icons';
 import { Skeleton } from '../../components/ui/Skeleton';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'UserProfile'>;
@@ -29,8 +29,10 @@ interface Profile {
   follower_count: number;
   following_count: number;
   post_count: number;
+  like_count: number;
   gender: 'MALE' | 'FEMALE';
   active_live_session_id: string | null;
+  has_unseen_story?: boolean;
 }
 
 interface Post {
@@ -71,6 +73,7 @@ export default function UserProfileScreen({ route, navigation }: Props) {
   const qc = useQueryClient();
 
   const [activeTab, setActiveTab] = useState<0 | 1>(0);
+  const [notifSheetOpen, setNotifSheetOpen] = useState(false);
 
   const { data: profile, isLoading } = useQuery<Profile>({
     queryKey: ['profile', username],
@@ -224,6 +227,11 @@ export default function UserProfileScreen({ route, navigation }: Props) {
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: theme.text }]}>@{profile.username}</Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+          {!isOwnProfile && profile.is_following && (
+            <TouchableOpacity onPress={() => setNotifSheetOpen(true)} style={styles.backBtn} activeOpacity={0.7}>
+              <IcBell size={20} color={theme.text} />
+            </TouchableOpacity>
+          )}
           <TouchableOpacity onPress={handleShare} style={styles.backBtn} activeOpacity={0.7}>
             <IcShare size={20} color={theme.text} />
           </TouchableOpacity>
@@ -235,6 +243,13 @@ export default function UserProfileScreen({ route, navigation }: Props) {
         </View>
       </View>
 
+      <NotificationSubscriptionSheet
+        visible={notifSheetOpen}
+        onClose={() => setNotifSheetOpen(false)}
+        userId={profile.id}
+        theme={theme}
+      />
+
       <FlatList
         data={displayPosts}
         keyExtractor={p => p.id}
@@ -244,11 +259,21 @@ export default function UserProfileScreen({ route, navigation }: Props) {
         columnWrapperStyle={{ gap: 1 }}
         ListHeaderComponent={
           <View style={[styles.hero, { backgroundColor: theme.surface, borderBottomColor: theme.borderLight }]}>
-            {/* Avatar — red ring if live */}
+            {/* Avatar — red ring if live, dark green ring if an unseen story */}
             <TouchableOpacity
-              style={[styles.avatarWrap, profile.active_live_session_id && styles.avatarLiveRing]}
-              activeOpacity={profile.active_live_session_id ? 0.8 : 1}
-              onPress={profile.active_live_session_id ? handleLivePress : undefined}
+              style={[
+                styles.avatarWrap,
+                profile.active_live_session_id && styles.avatarLiveRing,
+                !profile.active_live_session_id && profile.has_unseen_story && styles.avatarStoryRing,
+              ]}
+              activeOpacity={profile.active_live_session_id || profile.has_unseen_story ? 0.8 : 1}
+              onPress={
+                profile.active_live_session_id
+                  ? handleLivePress
+                  : profile.has_unseen_story
+                  ? () => navigation.navigate('Stories', { userId: profile.id })
+                  : undefined
+              }
             >
               {profile.avatar_url
                 ? <Image source={{ uri: profile.avatar_url }} style={styles.avatar} />
@@ -270,15 +295,13 @@ export default function UserProfileScreen({ route, navigation }: Props) {
             </TouchableOpacity>
 
             <Text style={[styles.displayName, { color: theme.text }]}>{profile.display_name}</Text>
-            {profile.bio ? <BioText bio={profile.bio} theme={theme} /> : null}
+            <Text style={[styles.username, { color: theme.textMuted }]}>@{profile.username}</Text>
 
             {/* Stats */}
             <View style={styles.statsRow}>
-              <StatItem label="Publications" value={profile.post_count} theme={theme} />
-              <View style={[styles.statDivider, { backgroundColor: theme.border }]} />
               <StatItem label="Abonnés" value={profile.follower_count} theme={theme} />
-              <View style={[styles.statDivider, { backgroundColor: theme.border }]} />
               <StatItem label="Abonnements" value={profile.following_count} theme={theme} />
+              <StatItem label="J'aime" value={profile.like_count} theme={theme} />
             </View>
 
             {/* Actions */}
@@ -310,21 +333,21 @@ export default function UserProfileScreen({ route, navigation }: Props) {
               </View>
             )}
 
+            {profile.bio ? <BioText bio={profile.bio} theme={theme} /> : null}
+
             {/* Tabs */}
-            <View style={[styles.tabsRow, { borderTopColor: theme.borderLight }]}>
+            <View style={styles.tabsRow}>
               <TouchableOpacity
                 style={[styles.tabItem, activeTab === 0 && { borderBottomColor: COLORS.primary }]}
                 onPress={() => setActiveTab(0)} activeOpacity={0.8}
               >
-                <IcPlay size={15} color={activeTab === 0 ? COLORS.primary : theme.textMuted} />
-                <Text style={[styles.tabItemText, { color: activeTab === 0 ? COLORS.primary : theme.textMuted }]}>Vidéos</Text>
+                <IcPlay size={20} color={activeTab === 0 ? COLORS.primary : theme.textMuted} strokeWidth={activeTab === 0 ? 2.4 : 1.8} />
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.tabItem, activeTab === 1 && { borderBottomColor: COLORS.primary }]}
                 onPress={() => setActiveTab(1)} activeOpacity={0.8}
               >
-                <IcRepeat size={15} color={activeTab === 1 ? COLORS.primary : theme.textMuted} />
-                <Text style={[styles.tabItemText, { color: activeTab === 1 ? COLORS.primary : theme.textMuted }]}>Reposts</Text>
+                <IcRepeat size={20} color={activeTab === 1 ? COLORS.primary : theme.textMuted} strokeWidth={activeTab === 1 ? 2.4 : 1.8} />
               </TouchableOpacity>
             </View>
           </View>
@@ -385,7 +408,7 @@ function LazyVideoCell({ post: p, theme, onPress, showRepostBadge }: { post: Pos
         </View>
       )}
       <View style={styles.cellOverlay}>
-        <IcPlay size={10} color={COLORS.white} />
+        <IcEye size={11} color={COLORS.white} />
         <Text style={styles.cellCount}>{fmtNum(p.view_count)}</Text>
       </View>
       {showRepostBadge && (
@@ -432,6 +455,73 @@ function StatItem({ label, value, theme }: { label: string; value: number; theme
   );
 }
 
+interface NotifSettings { notify_post: boolean; notify_live: boolean; notify_story: boolean }
+
+function NotificationSubscriptionSheet({ visible, onClose, userId, theme }: {
+  visible: boolean; onClose: () => void; userId: string; theme: any;
+}) {
+  const { data, isLoading } = useQuery<NotifSettings>({
+    queryKey: ['follow-notifications', userId],
+    queryFn: () => api.get(`/users/${userId}/follow-notifications`).then(r => r.data),
+    enabled: visible,
+  });
+  const [settings, setSettings] = useState<NotifSettings | null>(null);
+  useEffect(() => { if (data) setSettings(data); }, [data]);
+
+  const patchMutation = useMutation({
+    mutationFn: (next: Partial<NotifSettings>) => api.patch(`/users/${userId}/follow-notifications`, next),
+  });
+
+  const toggle = (key: keyof NotifSettings, value: boolean) => {
+    setSettings(s => s ? { ...s, [key]: value } : s);
+    patchMutation.mutate({ [key]: value });
+  };
+
+  if (!visible) return null;
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <TouchableOpacity style={sheetStyles.backdrop} activeOpacity={1} onPress={onClose} />
+      <View style={[sheetStyles.sheet, { backgroundColor: theme.surface }]}>
+        <View style={[sheetStyles.handle, { backgroundColor: theme.border }]} />
+        <View style={sheetStyles.header}>
+          <Text style={[sheetStyles.title, { color: theme.text }]}>Notifications</Text>
+          <TouchableOpacity onPress={onClose} style={{ padding: 4 }}>
+            <IcClose size={20} color={theme.textMuted} />
+          </TouchableOpacity>
+        </View>
+        {isLoading || !settings ? (
+          <ActivityIndicator color={COLORS.primaryLight} style={{ marginVertical: 30 }} />
+        ) : (
+          <>
+            <NotifRow label="Publications" value={settings.notify_post} onChange={(v) => toggle('notify_post', v)} theme={theme} />
+            <NotifRow label="Live" value={settings.notify_live} onChange={(v) => toggle('notify_live', v)} theme={theme} />
+            <NotifRow label="Stories" value={settings.notify_story} onChange={(v) => toggle('notify_story', v)} theme={theme} />
+          </>
+        )}
+      </View>
+    </Modal>
+  );
+}
+
+function NotifRow({ label, value, onChange, theme }: { label: string; value: boolean; onChange: (v: boolean) => void; theme: any }) {
+  return (
+    <View style={sheetStyles.row}>
+      <Text style={[sheetStyles.rowLabel, { color: theme.text }]}>{label}</Text>
+      <Switch value={value} onValueChange={onChange} trackColor={{ true: theme.tabActive, false: theme.border }} />
+    </View>
+  );
+}
+
+const sheetStyles = StyleSheet.create({
+  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
+  sheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingHorizontal: 20, paddingBottom: 34, paddingTop: 12 },
+  handle: { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
+  title: { fontSize: FONT.size.lg, fontWeight: FONT.weight.bold },
+  row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12 },
+  rowLabel: { fontSize: FONT.size.base },
+});
+
 const styles = StyleSheet.create({
   container: { flex: 1 },
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
@@ -449,6 +539,7 @@ const styles = StyleSheet.create({
   },
   avatarWrap: { position: 'relative', marginBottom: 4 },
   avatarLiveRing: { padding: 3, borderRadius: 50, borderWidth: 3, borderColor: '#FF3B30' },
+  avatarStoryRing: { padding: 3, borderRadius: 50, borderWidth: 3, borderColor: COLORS.primary },
   avatar: { width: 88, height: 88, borderRadius: 44 },
   avatarFallback: { borderWidth: 3, borderColor: COLORS.primary, alignItems: 'center', justifyContent: 'center' },
   avatarInitial: { fontSize: 34, fontWeight: FONT.weight.bold, color: COLORS.primary },
@@ -468,6 +559,7 @@ const styles = StyleSheet.create({
   liveText: { fontSize: 9, fontWeight: FONT.weight.bold, color: COLORS.white, letterSpacing: 0.3 },
 
   displayName: { fontSize: FONT.size.xxl, fontWeight: FONT.weight.bold, letterSpacing: -0.3 },
+  username: { fontSize: FONT.size.sm, marginTop: -6 },
   bio: { fontSize: FONT.size.sm, textAlign: 'center', lineHeight: 20 },
 
   statsRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.lg, marginTop: 4 },
@@ -491,7 +583,7 @@ const styles = StyleSheet.create({
   messageBtnText: { fontSize: FONT.size.sm, fontWeight: FONT.weight.semibold },
 
   tabsRow: {
-    flexDirection: 'row', width: '100%', marginTop: 4, borderTopWidth: 1,
+    flexDirection: 'row', width: '100%', marginTop: 10,
   },
   tabItem: {
     flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
@@ -507,11 +599,13 @@ const styles = StyleSheet.create({
   cellImg: { width: '100%', height: '100%' },
   cellFallback: { alignItems: 'center', justifyContent: 'center' },
   cellOverlay: {
-    position: 'absolute', bottom: 0, left: 0, right: 0,
-    padding: 4, backgroundColor: 'rgba(0,0,0,0.4)',
+    position: 'absolute', bottom: 6, left: 6,
     flexDirection: 'row', alignItems: 'center', gap: 3,
   },
-  cellCount: { fontSize: 10, color: COLORS.white },
+  cellCount: {
+    fontSize: 10, color: COLORS.white, fontWeight: '600',
+    textShadowColor: 'rgba(0,0,0,0.6)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3,
+  },
   empty: { alignItems: 'center', paddingTop: 40 },
   emptyText: { fontSize: FONT.size.base },
 });

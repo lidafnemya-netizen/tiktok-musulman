@@ -193,6 +193,47 @@ export async function adminRoutes(app: FastifyInstance) {
     return reply.status(201).send(category);
   });
 
+  app.get('/comments', { preHandler: requireAdmin }, async (req, reply) => {
+    const { cursor, limit = '30', search } = req.query as {
+      cursor?: string; limit?: string; search?: string;
+    };
+    const items = await prisma.comment.findMany({
+      where: search ? { content: { contains: search, mode: 'insensitive' } } : {},
+      take: parseInt(limit) + 1,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      orderBy: { created_at: 'desc' },
+      include: {
+        user: { select: { id: true, username: true, display_name: true } },
+        post: { select: { id: true, caption: true } },
+      },
+    });
+    const hasMore = items.length > parseInt(limit);
+    const data = hasMore ? items.slice(0, -1) : items;
+    return reply.send({ items: data, next_cursor: hasMore ? data[data.length - 1].id : null });
+  });
+
+  app.delete('/comments/:id', { preHandler: requireAdmin }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const existing = await prisma.comment.findUnique({ where: { id } });
+    if (!existing) return reply.status(404).send({ error: 'Not found' });
+    await prisma.comment.delete({ where: { id } });
+    await prisma.post.update({ where: { id: existing.post_id }, data: { comment_count: { decrement: 1 } } }).catch(() => {});
+    return reply.send({ success: true });
+  });
+
+  app.get('/settings', { preHandler: requireAdmin }, async (_req, reply) => {
+    const stats = await prisma.user.count();
+    return reply.send({
+      total_users: stats,
+      version: '2.2.0',
+      features: {
+        registration_open: true,
+        cross_gender_dm_requires_request: true,
+        live_streaming: true,
+      },
+    });
+  });
+
   app.get('/audit-logs', { preHandler: requireAdmin }, async (req, reply) => {
     const { limit = '50' } = req.query as { limit?: string };
     const logs = await prisma.auditLog.findMany({

@@ -5,6 +5,7 @@ import {
   Platform, ActivityIndicator, Image, Modal, Alert, ActionSheetIOS,
 } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
 import { api } from '../../api/client';
 import { useAuthStore } from '../../stores/authStore';
@@ -43,6 +44,7 @@ export function CommentsBottomSheet({ postId, onClose }: Props) {
   const theme = useTheme();
   const qc = useQueryClient();
   const { user } = useAuthStore();
+  const insets = useSafeAreaInsets();
   const [text, setText] = useState('');
   const [replyTo, setReplyTo] = useState<{ id: string; username: string } | null>(null);
   const inputRef = useRef<any>(null);
@@ -79,6 +81,23 @@ export function CommentsBottomSheet({ postId, onClose }: Props) {
   const panResponder = useRef(PanResponder.create({
     onStartShouldSetPanResponder: () => true,
     onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 5,
+    onPanResponderMove: (_, g) => {
+      if (g.dy > 0) translateY.setValue(g.dy);
+    },
+    onPanResponderRelease: (_, g) => {
+      if (g.dy > DRAG_THRESHOLD || g.vy > 0.5) {
+        close();
+      } else {
+        Animated.spring(translateY, { toValue: 0, useNativeDriver: true, tension: 65, friction: 11 }).start();
+      }
+    },
+  })).current;
+
+  // Allow swipe-down-to-close from anywhere in the list, but only when scrolled to the top
+  const listScrollY = useRef(0);
+  const listPanResponder = useRef(PanResponder.create({
+    onStartShouldSetPanResponder: () => false,
+    onMoveShouldSetPanResponderCapture: (_, g) => listScrollY.current <= 0 && g.dy > 8 && Math.abs(g.dy) > Math.abs(g.dx),
     onPanResponderMove: (_, g) => {
       if (g.dy > 0) translateY.setValue(g.dy);
     },
@@ -143,14 +162,17 @@ export function CommentsBottomSheet({ postId, onClose }: Props) {
 
           {/* Comments list */}
           {isLoading ? (
-            <View style={styles.center}><ActivityIndicator color={COLORS.primary} /></View>
+            <View style={styles.center}><ActivityIndicator color={COLORS.primaryLight} /></View>
           ) : (
             <FlatList
+              {...listPanResponder.panHandlers}
               data={data?.items ?? []}
               keyExtractor={c => c.id}
               contentContainerStyle={styles.list}
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
+              scrollEventThrottle={16}
+              onScroll={(e) => { listScrollY.current = e.nativeEvent.contentOffset.y; }}
               renderItem={({ item: c }) => (
                 <CommentRow
                   comment={c}
@@ -185,7 +207,7 @@ export function CommentsBottomSheet({ postId, onClose }: Props) {
           )}
 
           {/* Input */}
-          <View style={[styles.inputRow, { borderTopColor: theme.borderLight, backgroundColor: theme.surface }]}>
+          <View style={[styles.inputRow, { borderTopColor: theme.borderLight, backgroundColor: theme.surface, paddingBottom: Math.max(insets.bottom, 12) }]}>
             {replyTo && (
               <View style={[styles.replyBanner, { backgroundColor: theme.inputBg }]}>
                 <Text style={[styles.replyBannerText, { color: theme.textMuted }]}>
@@ -197,6 +219,14 @@ export function CommentsBottomSheet({ postId, onClose }: Props) {
               </View>
             )}
             <View style={styles.inputInner}>
+              {user?.avatar_url
+                ? <Image source={{ uri: user.avatar_url }} style={styles.myAvatar} />
+                : (
+                  <View style={[styles.myAvatar, styles.myAvatarFallback, { backgroundColor: theme.primaryBg }]}>
+                    <Text style={styles.myAvatarInitial}>{user?.display_name?.[0]?.toUpperCase() ?? '?'}</Text>
+                  </View>
+                )
+              }
               <TextInput
                 ref={inputRef}
                 style={[styles.input, { backgroundColor: theme.inputBg, color: theme.text, borderColor: theme.border }]}
@@ -207,16 +237,18 @@ export function CommentsBottomSheet({ postId, onClose }: Props) {
                 multiline
                 maxLength={500}
               />
-              <TouchableOpacity
-                style={[styles.sendBtn, (!text.trim() || addMutation.isPending) && styles.sendBtnOff]}
-                onPress={() => text.trim() && addMutation.mutate(text.trim())}
-                disabled={!text.trim() || addMutation.isPending}
-              >
-                {addMutation.isPending
-                  ? <ActivityIndicator size="small" color={COLORS.white} />
-                  : <IcSend size={17} color={COLORS.white} />
-                }
-              </TouchableOpacity>
+              {text.trim().length > 0 && (
+                <TouchableOpacity
+                  style={styles.sendBtn}
+                  onPress={() => text.trim() && addMutation.mutate(text.trim())}
+                  disabled={addMutation.isPending}
+                >
+                  {addMutation.isPending
+                    ? <ActivityIndicator size="small" color={COLORS.white} />
+                    : <IcSend size={17} color={COLORS.white} />
+                  }
+                </TouchableOpacity>
+              )}
             </View>
           </View>
         </Animated.View>
@@ -398,6 +430,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.md, borderTopWidth: 1,
   },
   inputInner: { flexDirection: 'row', gap: 8, alignItems: 'flex-end' },
+  myAvatar: { width: 32, height: 32, borderRadius: 16, flexShrink: 0 },
+  myAvatarFallback: { alignItems: 'center', justifyContent: 'center' },
+  myAvatarInitial: { fontSize: 13, fontWeight: '700', color: COLORS.primary },
   replyBanner: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, marginBottom: 8,

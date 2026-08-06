@@ -76,7 +76,7 @@ export default function FollowersScreen({ route, navigation }: Props) {
       </View>
 
       {isLoading ? (
-        <View style={styles.center}><ActivityIndicator color={COLORS.primary} /></View>
+        <View style={styles.center}><ActivityIndicator color={COLORS.primaryLight} /></View>
       ) : (
         <FlatList
           data={items}
@@ -139,7 +139,7 @@ export default function FollowersScreen({ route, navigation }: Props) {
               </Text>
             </View>
           }
-          ListFooterComponent={isFetchingNextPage ? <ActivityIndicator color={COLORS.primary} style={{ padding: 16 }} /> : null}
+          ListFooterComponent={isFetchingNextPage ? <ActivityIndicator color={COLORS.primaryLight} style={{ padding: 16 }} /> : null}
         />
       )}
     </View>

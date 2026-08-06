@@ -40,8 +40,11 @@ interface ThreadItem {
   reply_count: number;
   repost_count: number;
   is_liked: boolean;
+  is_reposted?: boolean;
   created_at: string;
   user: { id: string; username: string; display_name: string; avatar_url: string | null; is_verified: boolean };
+  thumbnail_url?: string | null;
+  media_urls?: string[];
 }
 
 export default function FeedScreen() {
@@ -197,22 +200,16 @@ export default function FeedScreen() {
 
       {/* Header overlay */}
       <View style={[styles.header, { paddingTop: insets.top + 6 }]}>
-        {/* Live button */}
+        {/* Live — far left, plain icon, no circle/badge */}
         <TouchableOpacity
-          style={styles.liveBtn}
+          style={[styles.liveInlineBtn, { top: insets.top + 2 }]}
           onPress={() => nav.navigate('LiveList' as any)}
           activeOpacity={0.8}
         >
-          <IcLive size={14} color="#FF3B30" />
-          {lives.length > 0 && <View style={styles.liveDot} />}
+          <IcLive size={18} color={lives.length > 0 ? '#FF3B30' : 'rgba(255,255,255,0.55)'} />
         </TouchableOpacity>
 
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.tabs}
-          style={styles.tabsScroll}
-        >
+        <View style={styles.tabs}>
           {([
             ['suivis', 'Suivis'],
             ['pourtoi', 'Pour toi'],
@@ -228,10 +225,14 @@ export default function FeedScreen() {
               {tab === key && <View style={styles.tabUnderline} />}
             </TouchableOpacity>
           ))}
-        </ScrollView>
+        </View>
 
-        {/* Search icon — top right */}
-        <TouchableOpacity style={styles.searchBtn} onPress={() => nav.navigate('Search')} activeOpacity={0.8}>
+        {/* Search icon — absolutely positioned so it doesn't skew centering */}
+        <TouchableOpacity
+          style={[styles.searchBtn, { top: insets.top + 2 }]}
+          onPress={() => nav.navigate('Search')}
+          activeOpacity={0.8}
+        >
           <IcSearch size={22} color={COLORS.white} />
         </TouchableOpacity>
       </View>
@@ -313,7 +314,7 @@ export default function FeedScreen() {
               return <BookCard book={item.data} isVisible={false} />;
             }
             if (item.type === 'live') {
-              return <FeedLiveCard live={item.data} onPress={() => nav.navigate('LiveViewer', { sessionId: item.data.id, broadcasterId: item.data.user.id })} />;
+              return <FeedLiveCard live={item.data} height={ITEM_H} onPress={() => nav.navigate('LiveViewer', { sessionId: item.data.id, broadcasterId: item.data.user.id })} />;
             }
             return (
               <VideoPlayerItem
@@ -436,10 +437,9 @@ function VideoSkeleton({ height }: { height: number }) {
 
 // ── Live card in feed ────────────────────────────────────────────────────────────
 
-function FeedLiveCard({ live, onPress }: { live: LiveSession; onPress: () => void }) {
-  const { height: H2 } = Dimensions.get('window');
+function FeedLiveCard({ live, onPress, height }: { live: LiveSession; onPress: () => void; height: number }) {
   return (
-    <TouchableOpacity style={{ width: '100%', height: H2, backgroundColor: '#0a0a0a' }} onPress={onPress} activeOpacity={0.95}>
+    <TouchableOpacity style={{ width: '100%', height, backgroundColor: '#0a0a0a', overflow: 'hidden' }} onPress={onPress} activeOpacity={0.95}>
       {live.thumbnail_url
         ? <Image source={{ uri: live.thumbnail_url }} style={{ ...StyleSheet.absoluteFill, opacity: 0.7 }} resizeMode="cover" />
         : live.user.avatar_url
@@ -601,11 +601,19 @@ function FilsFeed({
 function ThreadCard({ item, onUserPress, onPress, theme }: { item: ThreadItem; onUserPress: () => void; onPress: () => void; theme: any }) {
   const [liked, setLiked] = useState(item.is_liked);
   const [likeCount, setLikeCount] = useState(item.like_count);
+  const [reposted, setReposted] = useState(!!item.is_reposted);
+  const [repostCount, setRepostCount] = useState(item.repost_count);
 
   const likeMutation = useMutation({
     mutationFn: () => api.post(`/threads/${item.id}/like`),
     onMutate: () => { const was = liked; setLiked(l => !l); setLikeCount(c => was ? c - 1 : c + 1); },
     onError: () => { setLiked(item.is_liked); setLikeCount(item.like_count); },
+  });
+
+  const repostMutation = useMutation({
+    mutationFn: () => api.post(`/posts/${item.id}/repost`),
+    onMutate: () => { const was = reposted; setReposted(!was); setRepostCount(c => was ? c - 1 : c + 1); },
+    onError: () => { setReposted(!!item.is_reposted); setRepostCount(item.repost_count); },
   });
 
   return (
@@ -635,6 +643,13 @@ function ThreadCard({ item, onUserPress, onPress, theme }: { item: ThreadItem; o
         <TouchableOpacity onPress={onPress} activeOpacity={0.9}>
           <Text style={{ fontSize: FONT.size.base, color: theme.text, lineHeight: 22 }}>{item.content}</Text>
         </TouchableOpacity>
+        {((item.media_urls && item.media_urls.length > 0) || item.thumbnail_url) && (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, marginTop: 8 }}>
+            {(item.media_urls && item.media_urls.length > 0 ? item.media_urls : [item.thumbnail_url!]).map((url, i) => (
+              <Image key={i} source={{ uri: url }} style={{ width: 140, height: 140, borderRadius: 10 }} resizeMode="cover" />
+            ))}
+          </ScrollView>
+        )}
         <View style={{ flexDirection: 'row', gap: SPACING.md, marginTop: 8 }}>
           <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }} onPress={() => likeMutation.mutate()} activeOpacity={0.7}>
             {liked ? <IcHeartFill size={18} color="#FF3B5C" /> : <IcHeart size={18} color={theme.textMuted} />}
@@ -644,8 +659,9 @@ function ThreadCard({ item, onUserPress, onPress, theme }: { item: ThreadItem; o
             <IcComment size={18} color={theme.textMuted} />
             {item.reply_count > 0 && <Text style={{ fontSize: FONT.size.xs, color: theme.textMuted }}>{item.reply_count}</Text>}
           </TouchableOpacity>
-          <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }} activeOpacity={0.7}>
-            <IcShare size={18} color={theme.textMuted} />
+          <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }} onPress={() => repostMutation.mutate()} activeOpacity={0.7}>
+            <IcShare size={18} color={reposted ? COLORS.primary : theme.textMuted} />
+            {repostCount > 0 && <Text style={{ fontSize: FONT.size.xs, color: reposted ? COLORS.primary : theme.textMuted }}>{repostCount}</Text>}
           </TouchableOpacity>
         </View>
       </View>
@@ -657,11 +673,10 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#000' },
   header: {
     position: 'absolute', top: 0, left: 0, right: 0,
-    flexDirection: 'row', alignItems: 'center',
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     paddingHorizontal: 10, paddingBottom: 10, zIndex: 10,
   },
-  tabsScroll: { flex: 1 },
-  tabs: { flexDirection: 'row', gap: 22, paddingHorizontal: 6 },
+  tabs: { flexDirection: 'row', alignItems: 'center', gap: 20 },
   tabBtn: { alignItems: 'center', paddingBottom: 6, paddingHorizontal: 2 },
   tabText: { fontSize: 15, fontWeight: '600', color: 'rgba(255,255,255,0.55)',
     textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 },
@@ -670,17 +685,8 @@ const styles = StyleSheet.create({
     position: 'absolute', bottom: 0, left: '10%', right: '10%',
     height: 2.5, backgroundColor: COLORS.white, borderRadius: 2,
   },
-  liveBtn: {
-    width: 40, height: 40, borderRadius: 20,
-    backgroundColor: 'rgba(255,59,48,0.25)', borderWidth: 1.5, borderColor: '#FF3B30',
-    alignItems: 'center', justifyContent: 'center', position: 'relative',
-  },
-  liveDot: {
-    position: 'absolute', top: 6, right: 6,
-    width: 7, height: 7, borderRadius: 4, backgroundColor: '#FF3B30',
-    borderWidth: 1.5, borderColor: '#000',
-  },
-  searchBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  liveInlineBtn: { position: 'absolute', left: 10, width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
+  searchBtn: { position: 'absolute', right: 10, width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   emptyWrap: { height: H, alignItems: 'center', justifyContent: 'center' },
   emptyText: { color: COLORS.white, fontSize: FONT.size.base },
 });

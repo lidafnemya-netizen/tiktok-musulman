@@ -134,7 +134,7 @@ export function VideoPost({ post, isActive }: Props) {
         <TouchableOpacity
           onPress={() => navigation.navigate('UserProfile', { userId: post.user.id, username: post.user.username })}
         >
-          <Text style={styles.username}>@{post.user.username}</Text>
+          <Text style={styles.username}>{post.user.display_name || post.user.username}</Text>
         </TouchableOpacity>
         {post.caption ? <Text style={styles.caption} numberOfLines={3}>{post.caption}</Text> : null}
         {post.sound ? (

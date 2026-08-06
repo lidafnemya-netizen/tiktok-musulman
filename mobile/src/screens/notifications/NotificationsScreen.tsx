@@ -30,7 +30,7 @@ type Tab = 'all' | 'likes' | 'comments' | 'follows';
 
 const TABS: { key: Tab; label: string }[] = [
   { key: 'all',      label: 'Tous' },
-  { key: 'likes',    label: "J'aime" },
+  { key: 'likes',    label: 'Like' },
   { key: 'comments', label: 'Commentaires' },
   { key: 'follows',  label: 'Abonnés' },
 ];
@@ -153,7 +153,7 @@ export default function NotificationsScreen() {
       </View>
 
       {isLoading ? (
-        <View style={styles.center}><ActivityIndicator color={COLORS.primary} size="large" /></View>
+        <View style={styles.center}><ActivityIndicator color={COLORS.primaryLight} size="large" /></View>
       ) : (
         <FlatList
           data={filtered}
@@ -207,7 +207,7 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: SPACING.md, paddingVertical: 12, borderBottomWidth: 1,
+    paddingHorizontal: SPACING.md, paddingVertical: 8, borderBottomWidth: 1,
   },
   backBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   title: { fontSize: 19, fontWeight: '700' },

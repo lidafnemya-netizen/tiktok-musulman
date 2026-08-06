@@ -14,7 +14,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { api } from '../../api/client';
 import { RootStackParamList } from '../../navigation';
 import { COLORS, FONT, RADIUS } from '../../constants/theme';
-import { IcHeartFill, IcHeart, IcSave, IcShare, IcProfile } from '../ui/Icons';
+import { IcHeartFill, IcHeart, IcSave, IcShare, IcProfile, IcBook } from '../ui/Icons';
 import { Share } from 'react-native';
 
 const { width: W, height: H } = Dimensions.get('window');
@@ -68,7 +68,8 @@ export function BookCard({ book, isVisible }: Props) {
 
       {/* Book badge */}
       <View style={styles.bookBadge}>
-        <Text style={styles.bookBadgeText}>📚 Livre</Text>
+        <IcBook size={12} color={COLORS.gold} />
+        <Text style={styles.bookBadgeText}>Livre</Text>
       </View>
 
       {/* Main content */}
@@ -122,7 +123,7 @@ export function BookCard({ book, isVisible }: Props) {
         {/* Share */}
         <ActionBtn
           icon={<IcShare size={26} color={COLORS.white} />}
-          onPress={() => Share.share({ message: `Lis "${book.title}" sur Nour 📚\nhttps://nour.app/book/${book.id}` })}
+          onPress={() => Share.share({ message: `Lis "${book.title}" sur Nour\nhttps://nour.app/book/${book.id}` })}
         />
       </View>
     </View>
@@ -142,7 +143,7 @@ const styles = StyleSheet.create({
   container: { width: W, height: H, backgroundColor: '#1a0a00' },
   coverFallback: { backgroundColor: '#2a1a00' },
   gradient: { position: 'absolute', bottom: 0, left: 0, right: 0, height: H * 0.7 },
-  bookBadge: { position: 'absolute', top: 60, left: 16, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: RADIUS.full, paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1, borderColor: COLORS.gold },
+  bookBadge: { position: 'absolute', top: 60, left: 16, flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: RADIUS.full, paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1, borderColor: COLORS.gold },
   bookBadgeText: { fontSize: 12, fontWeight: '700', color: COLORS.gold },
   content: { position: 'absolute', bottom: 90, left: 16, right: 90, gap: 14 },
   coverWrap: { alignSelf: 'flex-start' },

@@ -111,14 +111,14 @@ async function main() {
   }
 
   // Seed 5 sample posts for testing
-  const posters = [testMale, testFemale, admin, testMale, testFemale];
+  const posters = [testMale, testFemale, admin];
   for (let i = 0; i < SEED_VIDEOS.length; i++) {
     const v = SEED_VIDEOS[i];
     const existing = await prisma.post.findFirst({ where: { video_url: v.video_url } });
     if (!existing) {
       await prisma.post.create({
         data: {
-          user_id: posters[i].id,
+          user_id: posters[i % posters.length].id,
           video_url: v.video_url,
           thumbnail_url: v.thumbnail_url,
           caption: v.caption,

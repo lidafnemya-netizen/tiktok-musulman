@@ -1,16 +1,18 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, Image,
+  View, Text, StyleSheet, TouchableOpacity, Image, TextInput,
   Animated, PanResponder, Dimensions, StatusBar, ActivityIndicator,
+  KeyboardAvoidingView, Platform, Alert, Share as RNShare,
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Video from 'react-native-video';
+import { useAuthStore } from '../../stores/authStore';
 import { api } from '../../api/client';
 import { RootStackParamList } from '../../navigation';
 import { COLORS, FONT, SPACING, RADIUS } from '../../constants/theme';
-import { IcClose, IcEye } from '../../components/ui/Icons';
+import { IcClose, IcEye, IcHeart, IcHeartFill, IcShare, IcSend } from '../../components/ui/Icons';
 
 const { width: W, height: H } = Dimensions.get('window');
 
@@ -28,6 +30,8 @@ interface Story {
   media_type: 'image' | 'video';
   duration: number;
   view_count: number;
+  like_count: number;
+  is_liked: boolean;
   expires_at: string;
   created_at: string;
   user: StoryUser;
@@ -50,28 +54,65 @@ export default function StoriesScreen() {
   const nav = useNavigation<Nav>();
   const route = useRoute<Route>();
   const insets = useSafeAreaInsets();
-  const { userId } = route.params;
+  const { user } = useAuthStore();
+  const { userId, queueUserIds } = route.params;
+
+  // Queue of user ids to advance through on swipe-right / end-of-stories (e.g. the Messages story bar).
+  const queue = queueUserIds && queueUserIds.length > 0 ? queueUserIds : [userId];
+  const [queueIdx, setQueueIdx] = useState(Math.max(0, queue.indexOf(userId)));
+  const currentUserId = queue[queueIdx] ?? userId;
 
   const [stories, setStories] = useState<Story[]>([]);
   const [index, setIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [paused, setPaused] = useState(false);
+  const [replyText, setReplyText] = useState('');
+  const [sendingReply, setSendingReply] = useState(false);
 
   const progress = useRef(new Animated.Value(0)).current;
   const animRef = useRef<Animated.CompositeAnimation | null>(null);
   const viewedIds = useRef<Set<string>>(new Set());
 
-  // ── Load stories ─────────────────────────────────────────────────────────────
+  // ── Navigation (refs avoid stale closures inside the progress-bar timer callback) ──
+  const goToNextUser = useCallback(() => {
+    setQueueIdx(qi => {
+      if (qi + 1 >= queue.length) { nav.goBack(); return qi; }
+      return qi + 1;
+    });
+  }, [queue.length, nav]);
+  const goToNextUserRef = useRef(goToNextUser);
+  useEffect(() => { goToNextUserRef.current = goToNextUser; }, [goToNextUser]);
+
+  const goNext = useCallback(() => {
+    setIndex(i => {
+      if (i + 1 >= storiesRef.current.length) { goToNextUserRef.current(); return i; }
+      return i + 1;
+    });
+  }, []);
+  const goNextRef = useRef(goNext);
+  useEffect(() => { goNextRef.current = goNext; }, [goNext]);
+
+  const goPrev = useCallback(() => {
+    setIndex(i => Math.max(0, i - 1));
+  }, []);
+
+  const storiesRef = useRef<Story[]>([]);
+  useEffect(() => { storiesRef.current = stories; }, [stories]);
+
+  // ── Load stories for the current queue user ─────────────────────────────────
   useEffect(() => {
-    api.get('/stories', { params: { user_id: userId } })
+    setLoading(true);
+    setIndex(0);
+    setReplyText('');
+    api.get('/stories', { params: { user_id: currentUserId } })
       .then(r => {
         const data: Story[] = r.data?.stories ?? r.data ?? [];
-        if (data.length === 0) { nav.goBack(); return; }
+        if (data.length === 0) { goToNextUserRef.current(); return; }
         setStories(data);
         setLoading(false);
       })
       .catch(() => nav.goBack());
-  }, [userId]);
+  }, [currentUserId]);
 
   // ── Mark viewed ──────────────────────────────────────────────────────────────
   const markViewed = useCallback((story: Story) => {
@@ -90,7 +131,7 @@ export default function StoriesScreen() {
       useNativeDriver: false,
     });
     animRef.current.start(({ finished }) => {
-      if (finished) goNext();
+      if (finished) goNextRef.current();
     });
   }, [progress]);
 
@@ -110,33 +151,62 @@ export default function StoriesScreen() {
     }
   }, [paused]);
 
-  // ── Navigation ───────────────────────────────────────────────────────────────
-  const goNext = useCallback(() => {
-    setIndex(i => {
-      if (i + 1 >= stories.length) { nav.goBack(); return i; }
-      return i + 1;
-    });
-  }, [stories.length, nav]);
+  // ── Like ─────────────────────────────────────────────────────────────────────
+  const toggleLike = useCallback(() => {
+    setStories(prev => prev.map((s, i) => i !== index ? s : {
+      ...s, is_liked: !s.is_liked, like_count: s.is_liked ? s.like_count - 1 : s.like_count + 1,
+    }));
+    const story = storiesRef.current[index];
+    if (story) api.post(`/stories/${story.id}/like`).catch(() => {});
+  }, [index]);
 
-  const goPrev = useCallback(() => {
-    setIndex(i => Math.max(0, i - 1));
-  }, []);
+  // ── Reply — sends a DM tied to this story ───────────────────────────────────
+  const sendReply = useCallback(async () => {
+    const text = replyText.trim();
+    const story = storiesRef.current[index];
+    if (!text || !story || sendingReply) return;
+    setSendingReply(true);
+    try {
+      await api.post(`/stories/${story.id}/reply`, { text });
+      setReplyText('');
+      Alert.alert('Envoyé', 'Ta réponse a été envoyée en message.');
+    } catch (e: any) {
+      const msg = e?.response?.data?.message ?? e?.response?.data?.error ?? "Impossible d'envoyer la réponse.";
+      Alert.alert('Erreur', msg);
+    } finally {
+      setSendingReply(false);
+    }
+  }, [replyText, index, sendingReply]);
 
-  // ── Swipe down to close ──────────────────────────────────────────────────────
+  // ── Share ────────────────────────────────────────────────────────────────────
+  const shareStory = useCallback(() => {
+    const story = storiesRef.current[index];
+    if (!story) return;
+    RNShare.share({ message: `Regarde la story de @${story.user.username} sur Nour`, url: story.media_url }).catch(() => {});
+  }, [index]);
+
+  // ── Swipe down to close / swipe right for next user ─────────────────────────
   const translateY = useRef(new Animated.Value(0)).current;
   const panResponder = useRef(
     PanResponder.create({
-      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 10 && g.dy > 0,
+      onMoveShouldSetPanResponder: (_, g) =>
+        (Math.abs(g.dy) > 10 && g.dy > 0 && Math.abs(g.dy) > Math.abs(g.dx)) ||
+        (g.dx > 24 && Math.abs(g.dx) > Math.abs(g.dy) * 1.3),
       onPanResponderGrant: () => animRef.current?.stop(),
       onPanResponderMove: (_, g) => {
-        if (g.dy > 0) translateY.setValue(g.dy);
+        if (Math.abs(g.dy) >= Math.abs(g.dx) && g.dy > 0) translateY.setValue(g.dy);
       },
       onPanResponderRelease: (_, g) => {
+        if (g.dx > 90 && Math.abs(g.dx) > Math.abs(g.dy) * 1.3) {
+          // Swipe right — jump to the next user in the story bar queue
+          goToNextUserRef.current();
+          return;
+        }
         if (g.dy > 100) {
           Animated.timing(translateY, { toValue: H, duration: 200, useNativeDriver: true }).start(() => nav.goBack());
         } else {
           Animated.spring(translateY, { toValue: 0, useNativeDriver: true }).start();
-          if (stories[index]) startProgress(stories[index]);
+          if (storiesRef.current[index]) startProgress(storiesRef.current[index]);
         }
       },
     })
@@ -153,6 +223,7 @@ export default function StoriesScreen() {
   if (!stories.length) return null;
 
   const story = stories[index];
+  const isOwnStory = story.user.id === user?.id;
 
   return (
     <Animated.View style={[styles.root, { transform: [{ translateY }] }]} {...panResponder.panHandlers}>
@@ -211,29 +282,66 @@ export default function StoriesScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Tap zones */}
+      {/* Tap zones — left half = previous, right half = next */}
       <View style={styles.tapZones} pointerEvents="box-none">
         <TouchableOpacity style={styles.tapLeft} activeOpacity={1} onPress={goPrev} />
         <TouchableOpacity style={styles.tapRight} activeOpacity={1} onPress={goNext} />
       </View>
 
       {/* Bottom */}
-      <View style={[styles.bottom, { paddingBottom: insets.bottom + 16 }]}>
-        <View style={styles.viewCount}>
-          <IcEye size={16} color={COLORS.white} />
-          <Text style={styles.viewCountText}>{story.view_count ?? 0}</Text>
+      {isOwnStory ? (
+        <View style={[styles.bottom, { paddingBottom: insets.bottom + 16 }]}>
+          <View style={styles.viewCount}>
+            <IcEye size={16} color={COLORS.white} />
+            <Text style={styles.viewCountText}>{story.view_count ?? 0}</Text>
+          </View>
+          {story.linked_post_id && (
+            <TouchableOpacity
+              style={styles.viewVideoBtn}
+              onPress={() => nav.navigate('VideoPlayer', { postId: story.linked_post_id! })}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.viewVideoText}>Voir la vidéo</Text>
+            </TouchableOpacity>
+          )}
         </View>
-
-        {story.linked_post_id && (
-          <TouchableOpacity
-            style={styles.viewVideoBtn}
-            onPress={() => nav.navigate('VideoPlayer', { postId: story.linked_post_id! })}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.viewVideoText}>Voir la vidéo</Text>
-          </TouchableOpacity>
-        )}
-      </View>
+      ) : (
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={[styles.replyBar, { paddingBottom: insets.bottom + 12 }]}
+        >
+          <View style={styles.replyRow}>
+            <View style={styles.replyInputWrap}>
+              <TextInput
+                style={styles.replyInput}
+                value={replyText}
+                onChangeText={setReplyText}
+                placeholder={`Répondre à ${story.user.display_name}...`}
+                placeholderTextColor="rgba(255,255,255,0.6)"
+                onFocus={() => setPaused(true)}
+                onBlur={() => setPaused(false)}
+                onSubmitEditing={sendReply}
+              />
+            </View>
+            {replyText.trim().length > 0 ? (
+              <TouchableOpacity onPress={sendReply} disabled={sendingReply} style={styles.replyIconBtn} activeOpacity={0.8}>
+                <IcSend size={20} color={COLORS.white} />
+              </TouchableOpacity>
+            ) : (
+              <>
+                <TouchableOpacity onPress={toggleLike} style={styles.replyIconBtn} activeOpacity={0.8}>
+                  {story.is_liked
+                    ? <IcHeartFill size={24} color="#FF3B5C" />
+                    : <IcHeart size={24} color={COLORS.white} />}
+                </TouchableOpacity>
+                <TouchableOpacity onPress={shareStory} style={styles.replyIconBtn} activeOpacity={0.8}>
+                  <IcShare size={22} color={COLORS.white} />
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        </KeyboardAvoidingView>
+      )}
     </Animated.View>
   );
 }
@@ -312,4 +420,16 @@ const styles = StyleSheet.create({
   viewVideoText: {
     fontSize: FONT.size.sm, fontWeight: FONT.weight.semibold, color: COLORS.white,
   },
+  replyBar: {
+    position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 20,
+    paddingHorizontal: SPACING.md,
+  },
+  replyRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  replyInputWrap: {
+    flex: 1, height: 42, borderRadius: RADIUS.full,
+    borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.5)',
+    justifyContent: 'center', paddingHorizontal: 16,
+  },
+  replyInput: { color: COLORS.white, fontSize: FONT.size.sm, padding: 0 },
+  replyIconBtn: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center' },
 });

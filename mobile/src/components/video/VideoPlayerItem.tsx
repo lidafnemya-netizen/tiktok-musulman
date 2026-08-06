@@ -16,7 +16,7 @@ import { RootStackParamList } from '../../navigation';
 import { COLORS, FONT, RADIUS } from '../../constants/theme';
 import {
   IcHeartFill, IcHeart, IcComment, IcShare, IcSave, IcSaveFill,
-  IcMusic, IcPlay, IcVolume, IcMute, IcCheck, IcMaximize, IcRepeat,
+  IcMusic, IcPlay, IcCheck, IcMaximize, IcRepeat,
   IcClose, IcProfile,
 } from '../ui/Icons';
 import ShareSheet from './ShareSheet';
@@ -27,6 +27,7 @@ export interface FeedPost {
   id: string;
   video_url: string;
   thumbnail_url: string | null;
+  media_urls?: string[];
   caption: string | null;
   duration: number;
   view_count: number;
@@ -38,8 +39,12 @@ export interface FeedPost {
   user: {
     id: string; username: string; display_name: string;
     avatar_url: string | null; is_verified: boolean; is_following?: boolean;
+    has_unseen_story?: boolean;
   };
-  sound: { id: string; title: string; artist: string | null } | null;
+  sound: {
+    id: string; title: string; artist: string | null; url?: string;
+    origin_user?: { id: string; username: string; avatar_url: string | null } | null;
+  } | null;
   reposted_by?: { id: string; username: string; avatar_url: string | null } | null;
 }
 
@@ -140,12 +145,17 @@ export function VideoPlayerItem({ post, isVisible, onComment, onNotInterested, i
   const [panelOpen, setPanelOpen] = useState(false);
 
   const openProfilePanel = useCallback(() => {
-    setPanelOpen(true);
+    // Swipe commit → the panel (which was already following the finger) snaps
+    // fully into place, then immediately hands off to the real profile screen —
+    // no intermediate summary step, no extra tap required.
     Animated.parallel([
       Animated.spring(panelX, { toValue: 0, useNativeDriver: true, damping: 26, stiffness: 300, mass: 0.9 }),
-      Animated.timing(panelBackdrop, { toValue: 0.55, duration: 220, useNativeDriver: true }),
-    ]).start();
-  }, [panelX, panelBackdrop]);
+      Animated.timing(panelBackdrop, { toValue: 0.55, duration: 180, useNativeDriver: true }),
+    ]).start(() => {
+      setPanelOpen(false);
+      nav.navigate('UserProfile', { userId: post.user.id, username: post.user.username });
+    });
+  }, [panelX, panelBackdrop, nav, post.user.id, post.user.username]);
 
   const closeProfilePanel = useCallback(() => {
     Animated.parallel([
@@ -332,13 +342,14 @@ export function VideoPlayerItem({ post, isVisible, onComment, onNotInterested, i
     lastTapRef.current = 0;
     longPressZoneRef.current = zone;
 
-    if (zone === 'left' || zone === 'right') {
-      setRate(2);
-      showSpeedIndicator();
-    } else {
+    if (zone === 'middle') {
       pausedBeforeLongRef.current = paused;
       setPaused(true);
-      showPauseIndicator();
+      ReactNativeHapticFeedback.trigger('impactMedium', { enableVibrateFallback: true });
+      setShareSheetVisible(true);
+    } else if (zone === 'left' || zone === 'right') {
+      setRate(2);
+      showSpeedIndicator();
     }
   }, [paused, showPauseIndicator, showSpeedIndicator]);
 
@@ -358,6 +369,15 @@ export function VideoPlayerItem({ post, isVisible, onComment, onNotInterested, i
 
   const isVideo = post.video_url && post.video_url !== '' &&
     (post.video_url.startsWith('http') || post.video_url.startsWith('file'));
+  const imageUrls = !isVideo
+    ? (post.media_urls && post.media_urls.length > 0 ? post.media_urls : (post.thumbnail_url ? [post.thumbnail_url] : []))
+    : [];
+  const [imageIndex, setImageIndex] = useState(0);
+
+  const soundOriginUser = post.sound?.origin_user && post.sound.origin_user.id !== post.user.id
+    ? post.sound.origin_user
+    : null;
+  const soundAvatarUrl = soundOriginUser ? soundOriginUser.avatar_url : post.user.avatar_url;
 
   // ── Like button toggle (left heart icon) ─────────────────────────────────
   const handleLikePress = useCallback(() => {
@@ -374,11 +394,36 @@ export function VideoPlayerItem({ post, isVisible, onComment, onNotInterested, i
       style={[styles.container, { height: ITEM_H }]}
       {...profilePanResponder.panHandlers}
     >
-      {/* LAYER 1 — Thumbnail */}
-      {post.thumbnail_url
-        ? <Image source={{ uri: post.thumbnail_url }} style={StyleSheet.absoluteFill} resizeMode="cover" />
-        : <View style={[StyleSheet.absoluteFill, styles.fallback]} />
-      }
+      {/* LAYER 1 — Thumbnail / image carousel */}
+      {!isVideo && imageUrls.length > 1 ? (
+        <ScrollView
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          style={StyleSheet.absoluteFill}
+          onMomentumScrollEnd={(e) => {
+            const idx = Math.round(e.nativeEvent.contentOffset.x / W);
+            setImageIndex(Math.max(0, Math.min(idx, imageUrls.length - 1)));
+          }}
+        >
+          {imageUrls.map((url, i) => (
+            <Image key={url + i} source={{ uri: url }} style={{ width: W, height: ITEM_H }} resizeMode="cover" />
+          ))}
+        </ScrollView>
+      ) : (post.thumbnail_url || imageUrls[0]) ? (
+        <Image source={{ uri: post.thumbnail_url ?? imageUrls[0] }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+      ) : (
+        <View style={[StyleSheet.absoluteFill, styles.fallback]} />
+      )}
+
+      {/* Dot pagination for multi-image posts */}
+      {!isVideo && imageUrls.length > 1 && (
+        <View style={styles.imageDots} pointerEvents="none">
+          {imageUrls.map((_, i) => (
+            <View key={i} style={[styles.imageDot, i === imageIndex && styles.imageDotActive]} />
+          ))}
+        </View>
+      )}
 
       {/* LAYER 2 — Video */}
       {isVideo && (
@@ -466,10 +511,7 @@ export function VideoPlayerItem({ post, isVisible, onComment, onNotInterested, i
         </View>
       </Animated.View>
 
-      {/* 2x speed indicator */}
-      <Animated.View style={[styles.speedBadge, { opacity: speedAnim }]} pointerEvents="none">
-        <Text style={styles.speedText}>2x</Text>
-      </Animated.View>
+      {/* speed indicator hidden per design */}
 
       {/* Floating heart on double-tap — TikTok bounce */}
       <Animated.View
@@ -483,17 +525,19 @@ export function VideoPlayerItem({ post, isVisible, onComment, onNotInterested, i
         <IcHeartFill size={112} color="#FF3B5C" />
       </Animated.View>
 
-      {/* Seekable progress bar — interactive, above tab bar */}
-      <View style={styles.seekBarHit} {...seekPanResponder.panHandlers}>
-        <View style={styles.progressBg}>
-          <View style={[styles.progressFill, { width: `${Math.round(progress * 100)}%` }]} />
-          {/* Thumb */}
-          <View style={[styles.progressThumb, { left: `${Math.round(progress * 100)}%` }]} />
+      {/* Seekable progress bar — video only, interactive, above tab bar */}
+      {isVideo && (
+        <View style={styles.seekBarHit} {...seekPanResponder.panHandlers}>
+          <View style={styles.progressBg}>
+            <View style={[styles.progressFill, { width: `${Math.round(progress * 100)}%` }]} />
+            {/* Thumb */}
+            <View style={[styles.progressThumb, { left: `${Math.round(progress * 100)}%` }]} />
+          </View>
         </View>
-      </View>
+      )}
 
       {/* Time display while seeking */}
-      {seeking && (
+      {isVideo && seeking && (
         <View style={styles.seekTimeBubble} pointerEvents="none">
           <Text style={styles.seekTimeText}>
             {fmtDuration(seekTime)} / {fmtDuration(totalDurationRef.current)}
@@ -512,11 +556,6 @@ export function VideoPlayerItem({ post, isVisible, onComment, onNotInterested, i
           <Text style={styles.fullscreenText}>Plein écran</Text>
         </TouchableOpacity>
       )}
-
-      {/* Mute button */}
-      <TouchableOpacity style={styles.muteBtn} onPress={() => setMuted(m => !m)} activeOpacity={0.8}>
-        {muted ? <IcMute size={18} color={COLORS.white} /> : <IcVolume size={18} color={COLORS.white} />}
-      </TouchableOpacity>
 
       {/* Bottom gradient */}
       <LinearGradient
@@ -545,7 +584,7 @@ export function VideoPlayerItem({ post, isVisible, onComment, onNotInterested, i
       {/* Bottom left — username + caption */}
       <View style={styles.bottomLeft}>
         <TouchableOpacity onPress={goToProfile} activeOpacity={0.8} style={styles.usernameRow}>
-          <Text style={styles.username}>@{post.user.username}</Text>
+          <Text style={styles.username}>{post.user.display_name || post.user.username}</Text>
           {post.user.is_verified && (
             <View style={styles.verifiedBadge}>
               <IcCheck size={9} color={COLORS.white} strokeWidth={3} />
@@ -560,24 +599,17 @@ export function VideoPlayerItem({ post, isVisible, onComment, onNotInterested, i
             />
           </TouchableOpacity>
         ) : null}
-        {post.sound && (
-          <TouchableOpacity
-            style={styles.soundRow}
-            onPress={() => nav.navigate('Sound', { soundId: post.sound!.id, title: post.sound!.title, artist: post.sound!.artist })}
-            activeOpacity={0.8}
-          >
-            <IcMusic size={13} color={COLORS.white} />
-            <Text style={styles.soundText} numberOfLines={1}>
-              {post.sound.title}{post.sound.artist ? ` · ${post.sound.artist}` : ''}
-            </Text>
-          </TouchableOpacity>
-        )}
+        {null /* sound row hidden per design */}
       </View>
 
       {/* Right actions */}
       <View style={styles.rightActions}>
-        {/* Avatar + follow */}
-        <TouchableOpacity style={styles.avatarWrap} onPress={goToProfile} activeOpacity={0.85}>
+        {/* Avatar + follow — dark green ring when the poster has an unseen story */}
+        <TouchableOpacity
+          style={[styles.avatarWrap, post.user.has_unseen_story && styles.avatarStoryRing]}
+          onPress={() => post.user.has_unseen_story ? nav.navigate('Stories', { userId: post.user.id }) : goToProfile()}
+          activeOpacity={0.85}
+        >
           {post.user.avatar_url
             ? <Image source={{ uri: post.user.avatar_url }} style={styles.avatar} />
             : <View style={styles.avatarFallback}>
@@ -623,24 +655,26 @@ export function VideoPlayerItem({ post, isVisible, onComment, onNotInterested, i
           }}
         />
 
-        {/* Vinyl disc — sound */}
-        {post.sound && (
-          <TouchableOpacity onPress={() => setSoundSheetVisible(true)} activeOpacity={0.85} style={styles.vinylWrap}>
-            <Animated.View style={[styles.vinylOuter, { transform: [{ rotate: vinylSpin }] }]}>
-              {/* Outer ring */}
-              <View style={styles.vinylRing} />
-              {/* Center image or fallback */}
-              {post.user.avatar_url
-                ? <Image source={{ uri: post.user.avatar_url }} style={styles.vinylCenter} />
-                : <View style={[styles.vinylCenter, { backgroundColor: COLORS.primaryBg }]}>
-                    <IcMusic size={12} color={COLORS.primary} />
-                  </View>
-              }
-              {/* Center hole */}
-              <View style={styles.vinylHole} />
-            </Animated.View>
-          </TouchableOpacity>
-        )}
+        {/* Sound bubble — owner's avatar for original audio, or the sound's original creator if reused */}
+        <TouchableOpacity
+          style={styles.vinylWrap}
+          activeOpacity={0.85}
+          onPress={() => (post.sound ? setSoundSheetVisible(true) : goToProfile())}
+        >
+          <Animated.View style={[styles.vinylOuter, { transform: [{ rotate: vinylSpin }] }]}>
+            <View style={styles.vinylRing} />
+            <View style={styles.vinylCenter}>
+              {soundAvatarUrl ? (
+                <Image source={{ uri: soundAvatarUrl }} style={{ width: '100%', height: '100%' }} />
+              ) : (
+                <View style={[styles.vinylCenter, { backgroundColor: COLORS.primaryBg, alignItems: 'center', justifyContent: 'center' }]}>
+                  <IcMusic size={12} color={COLORS.primary} />
+                </View>
+              )}
+            </View>
+            <View style={styles.vinylHole} />
+          </Animated.View>
+        </TouchableOpacity>
       </View>
 
       {/* Sound Sheet */}
@@ -657,6 +691,11 @@ export function VideoPlayerItem({ post, isVisible, onComment, onNotInterested, i
             setSoundSheetVisible(false);
             nav.navigate('Create' as any);
           }}
+          creator={soundOriginUser}
+          onViewCreator={soundOriginUser ? () => {
+            setSoundSheetVisible(false);
+            nav.navigate('UserProfile', { userId: soundOriginUser.id, username: soundOriginUser.username });
+          } : undefined}
         />
       )}
       {/* Share Sheet */}
@@ -698,30 +737,55 @@ export function VideoPlayerItem({ post, isVisible, onComment, onNotInterested, i
 
 // ── Sound Sheet ─────────────────────────────────────────────────────────────
 function SoundSheet({
-  visible, sound, onClose, onNavigateSound, onUseSound,
+  visible, sound, onClose, onNavigateSound, onUseSound, creator, onViewCreator,
 }: {
   visible: boolean;
-  sound: { id: string; title: string; artist: string | null };
+  sound: { id: string; title: string; artist: string | null; url?: string };
   onClose: () => void;
   onNavigateSound: () => void;
   onUseSound: () => void;
+  creator?: { id: string; username: string; avatar_url: string | null } | null;
+  onViewCreator?: () => void;
 }) {
+  const [playing, setPlaying] = useState(false);
+  useEffect(() => { if (!visible) setPlaying(false); }, [visible]);
   if (!visible) return null;
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      {sound.url && (
+        <Video source={{ uri: sound.url }} paused={!playing} repeat
+          style={{ width: 0, height: 0 }} onEnd={() => setPlaying(false)} />
+      )}
       <TouchableOpacity style={soundStyles.backdrop} activeOpacity={1} onPress={onClose} />
       <View style={soundStyles.sheet}>
         <View style={soundStyles.handle} />
         {/* Sound info */}
         <View style={soundStyles.soundInfo}>
-          <View style={soundStyles.soundIcon}>
-            <IcMusic size={22} color={COLORS.primary} />
-          </View>
+          <TouchableOpacity
+            style={soundStyles.soundIcon}
+            activeOpacity={0.8}
+            disabled={!sound.url}
+            onPress={() => setPlaying(p => !p)}
+          >
+            {playing ? <IcClose size={20} color={COLORS.primary} /> : <IcPlay size={20} color={COLORS.primary} />}
+          </TouchableOpacity>
           <View style={{ flex: 1 }}>
             <Text style={soundStyles.soundTitle} numberOfLines={1}>{sound.title}</Text>
             {sound.artist && <Text style={soundStyles.soundArtist} numberOfLines={1}>{sound.artist}</Text>}
           </View>
         </View>
+
+        {creator && onViewCreator && (
+          <TouchableOpacity style={soundStyles.creatorRow} onPress={onViewCreator} activeOpacity={0.7}>
+            {creator.avatar_url
+              ? <Image source={{ uri: creator.avatar_url }} style={soundStyles.creatorAvatar} />
+              : <View style={[soundStyles.creatorAvatar, { backgroundColor: COLORS.primaryBg, alignItems: 'center', justifyContent: 'center' }]}>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: COLORS.primary }}>{creator.username[0]?.toUpperCase()}</Text>
+                </View>
+            }
+            <Text style={soundStyles.creatorText}>Son original de @{creator.username}</Text>
+          </TouchableOpacity>
+        )}
 
         <View style={soundStyles.divider} />
 
@@ -760,6 +824,9 @@ const soundStyles = StyleSheet.create({
   },
   soundTitle: { fontSize: FONT.size.base, fontWeight: FONT.weight.semibold, color: COLORS.text },
   soundArtist: { fontSize: FONT.size.sm, color: COLORS.textMuted, marginTop: 2 },
+  creatorRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 },
+  creatorAvatar: { width: 22, height: 22, borderRadius: 11, overflow: 'hidden' },
+  creatorText: { fontSize: FONT.size.xs, color: COLORS.textMuted },
   divider: { height: 1, backgroundColor: COLORS.borderLight, marginBottom: 8 },
   option: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 14, paddingHorizontal: 4 },
   optionText: { fontSize: FONT.size.base, color: COLORS.text },
@@ -804,6 +871,14 @@ function ActionBtn({
 const styles = StyleSheet.create({
   container: { width: W, height: H, backgroundColor: '#000', overflow: 'hidden' }, // H overridden by inline
   fallback: { backgroundColor: '#0A0A0A' },
+  imageDots: {
+    position: 'absolute', bottom: 48, left: 0, right: 0,
+    flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 5,
+  },
+  imageDot: {
+    width: 5, height: 5, borderRadius: 2.5, backgroundColor: 'rgba(255,255,255,0.4)',
+  },
+  imageDotActive: { backgroundColor: COLORS.primaryLight, width: 6, height: 6, borderRadius: 3 },
 
   // Gesture zones
   zonesRow: { flex: 1, flexDirection: 'row' },
@@ -857,7 +932,7 @@ const styles = StyleSheet.create({
   repostAvatarFallback: { backgroundColor: COLORS.primaryBg, alignItems: 'center', justifyContent: 'center' },
   repostAvatarInitial: { fontSize: 8, fontWeight: '700', color: COLORS.primary },
   repostText: { fontSize: 11, color: 'rgba(255,255,255,0.9)', fontWeight: '600' },
-  bottomLeft: { position: 'absolute', bottom: 56, left: 14, right: 90, gap: 5 },
+  bottomLeft: { position: 'absolute', bottom: 26, left: 14, right: 90, gap: 5 },
   usernameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   username: { fontSize: FONT.size.base, fontWeight: FONT.weight.bold, color: COLORS.white },
   verifiedBadge: {
@@ -869,8 +944,9 @@ const styles = StyleSheet.create({
   soundRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   soundText: { fontSize: FONT.size.xs, color: 'rgba(255,255,255,0.85)', flexShrink: 1 },
 
-  rightActions: { position: 'absolute', right: 10, bottom: 88, alignItems: 'center', gap: 20 },
+  rightActions: { position: 'absolute', right: 10, top: '50%', marginTop: -80, alignItems: 'center', gap: 20 },
   avatarWrap: { position: 'relative', marginBottom: 6 },
+  avatarStoryRing: { padding: 2.5, borderRadius: 30, borderWidth: 2.5, borderColor: COLORS.primary },
   avatar: {
     width: 52, height: 52, borderRadius: 26,
     borderWidth: 2, borderColor: COLORS.white,
@@ -917,6 +993,7 @@ const styles = StyleSheet.create({
   seekBarHit: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
     height: 48, justifyContent: 'flex-end',
+    zIndex: 50, elevation: 50,
   },
   progressBg: {
     height: 3, backgroundColor: 'rgba(255,255,255,0.22)',
@@ -927,9 +1004,9 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.white, borderRadius: 99,
   },
   progressThumb: {
-    position: 'absolute', top: -5.5, width: 14, height: 14,
-    borderRadius: 7, backgroundColor: COLORS.white,
-    marginLeft: -7, shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
+    position: 'absolute', top: -3.5, width: 9, height: 9,
+    borderRadius: 4.5, backgroundColor: COLORS.white,
+    marginLeft: -4.5, shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.4, shadowRadius: 3,
   },
   seekTimeBubble: {

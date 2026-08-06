@@ -135,7 +135,7 @@ export default function ExploreScreen() {
           </View>
 
           {searchLoading ? (
-            <ActivityIndicator color={COLORS.primary} style={{ marginTop: 40 }} />
+            <ActivityIndicator color={COLORS.primaryLight} style={{ marginTop: 40 }} />
           ) : searchTab === 'users' ? (
             <FlatList
               data={searchData?.users ?? []}
@@ -203,7 +203,7 @@ export default function ExploreScreen() {
           renderItem={renderGridItem}
           ListEmptyComponent={
             trendingLoading ? (
-              <ActivityIndicator color={COLORS.primary} style={{ marginTop: 60 }} />
+              <ActivityIndicator color={COLORS.primaryLight} style={{ marginTop: 60 }} />
             ) : (
               <View style={[styles.emptyWrap, { backgroundColor: theme.bg }]}>
                 <Text style={[styles.emptyTitle, { color: theme.text }]}>Aucun contenu</Text>

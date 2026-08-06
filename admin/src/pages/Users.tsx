@@ -43,6 +43,18 @@ export default function Users() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-users'] }),
   });
 
+  const roleMutation = useMutation({
+    mutationFn: ({ id, role }: { id: string; role: string }) => api.patch(`/admin/users/${id}/role`, { role }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-users'] }),
+  });
+
+  const handlePromote = (user: User) => {
+    const next = user.role === 'ADMIN' ? 'USER' : user.role === 'MODERATOR' ? 'ADMIN' : 'MODERATOR';
+    if (window.confirm(`Change @${user.username} role from ${user.role} to ${next}?`)) {
+      roleMutation.mutate({ id: user.id, role: next });
+    }
+  };
+
   const handleSearch = (v: string) => {
     setSearch(v);
     clearTimeout(timer.current);
@@ -139,6 +151,9 @@ export default function Users() {
                         <Ban size={13} />
                       </Button>
                     )}
+                    <Button variant="ghost" size="icon" onClick={() => handlePromote(user)} title="Change role" className="h-7 w-7 hover:text-indigo-400">
+                      <UserCog size={13} />
+                    </Button>
                   </div>
                 </TableCell>
               </TableRow>

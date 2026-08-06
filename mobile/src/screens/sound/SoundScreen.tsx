@@ -100,7 +100,7 @@ export default function SoundScreen({ route, navigation }: Props) {
         )}
         ListEmptyComponent={
           isLoading
-            ? <ActivityIndicator color={COLORS.primary} style={{ marginTop: 40 }} />
+            ? <ActivityIndicator color={COLORS.primaryLight} style={{ marginTop: 40 }} />
             : <Text style={[styles.empty, { color: theme.textMuted }]}>Aucune vidéo avec ce son</Text>
         }
       />

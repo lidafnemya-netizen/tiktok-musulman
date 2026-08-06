@@ -10,13 +10,16 @@ interface AvatarProps {
   onPress?: () => void;
   showBorder?: boolean;
   verified?: boolean;
+  /** Shows an unseen-story ring around the avatar, with a gap between avatar and ring. */
+  hasStory?: boolean;
 }
 
-export function Avatar({ uri, name, size = 40, onPress, showBorder, verified }: AvatarProps) {
+export function Avatar({ uri, name, size = 40, onPress, showBorder, verified, hasStory }: AvatarProps) {
   const initial = name ? name.charAt(0).toUpperCase() : '?';
   const fontSize = size * 0.38;
+  const ringSize = size + 8;
 
-  const content = (
+  const inner = (
     <View style={[styles.container, { width: size, height: size, borderRadius: size / 2 }, showBorder && styles.border]}>
       {uri ? (
         <Image source={{ uri }} style={[styles.image, { borderRadius: size / 2 }]} />
@@ -32,6 +35,12 @@ export function Avatar({ uri, name, size = 40, onPress, showBorder, verified }: 
       )}
     </View>
   );
+
+  const content = hasStory ? (
+    <View style={[styles.storyRing, { width: ringSize, height: ringSize, borderRadius: ringSize / 2 }]}>
+      {inner}
+    </View>
+  ) : inner;
 
   if (onPress) {
     return (
@@ -51,6 +60,12 @@ const styles = StyleSheet.create({
   border: {
     borderWidth: 2,
     borderColor: COLORS.primary,
+  },
+  storyRing: {
+    borderWidth: 2,
+    borderColor: COLORS.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   image: {
     width: '100%',

@@ -15,9 +15,9 @@ import {
   Grid, BarChart2, Sliders, AlertCircle, Info, Trash2, Send,
   Star, Award, Shield, Zap, LogOut, HelpCircle,
   Globe, Volume2, VolumeX, Moon, Sun, FileText,
-  AtSign, Hash, Repeat2, ThumbsUp, Smile, Flag,
+  AtSign, Hash, Repeat2, ThumbsUp, Smile, Frown, Flag,
   Radio, PenLine, Maximize2, SlidersHorizontal, CornerUpLeft,
-  Download, Link, Copy,
+  Download, Link, Copy, BookOpen, MessageCircleMore,
 } from 'lucide-react-native';
 import { COLORS } from '../../constants/theme';
 
@@ -84,6 +84,9 @@ export const IcImage      = mk(Image);
 export const IcVideo      = mk(Video);
 export const IcMusic      = mk(Music);
 export const IcFilm       = mk(Film);
+export const IcBook       = mk(BookOpen);
+export const IcInstagram  = mk(Camera);
+export const IcWhatsApp   = mk(MessageCircleMore);
 
 // ── Social ────────────────────────────────────────────────────────────────────
 export const IcFollow     = mk(UserPlus);
@@ -120,6 +123,8 @@ export const IcClock      = mk(Clock);
 export const IcRefresh    = mk(RefreshCw);
 export const IcText       = mk(FileText);
 export const IcSmile      = mk(Smile);
+export const IcFrown      = mk(Frown);
+export const IcThumbsUp   = mk(ThumbsUp);
 
 // ── Live / Radio ──────────────────────────────────────────────────────────────
 export const IcLive       = mk(Radio);

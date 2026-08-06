@@ -55,7 +55,7 @@ export default function LiveListScreen({ navigation }: Props) {
       </View>
 
       {isLoading ? (
-        <ActivityIndicator color={COLORS.primary} style={{ marginTop: 60 }} />
+        <ActivityIndicator color={COLORS.primaryLight} style={{ marginTop: 60 }} />
       ) : lives.length === 0 ? (
         <View style={styles.empty}>
           <View style={styles.emptyDot} />

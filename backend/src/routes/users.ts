@@ -1,6 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { prisma } from '../config/database';
 import { authenticate } from '../middleware/auth';
+import { getUnseenStorySet } from '../lib/stories';
 import { z } from 'zod';
 
 // Only fields that exist in the User DB model
@@ -39,28 +40,115 @@ export async function userRoutes(app: FastifyInstance) {
 
   app.get('/:username', { preHandler: authenticate }, async (req, reply) => {
     const { username } = req.params as { username: string };
+    const viewerId = req.currentUser!.id;
     const user = await prisma.user.findUnique({
       where: { username },
       select: {
         id: true, username: true, display_name: true, bio: true,
         avatar_url: true, cover_url: true, is_verified: true, gender: true,
         follower_count: true, following_count: true, post_count: true,
-        like_count: true, created_at: true,
+        created_at: true,
       },
     });
     if (!user) return reply.status(404).send({ error: 'User not found' });
 
-    const [isFollowing, activeLive] = await Promise.all([
+    const [isFollowing, activeLive, unseenStories, likeSum, viewer] = await Promise.all([
       prisma.follow.findUnique({
-        where: { follower_id_following_id: { follower_id: req.currentUser!.id, following_id: user.id } },
+        where: { follower_id_following_id: { follower_id: viewerId, following_id: user.id } },
       }),
       prisma.liveSession.findFirst({
         where: { user_id: user.id, is_active: true },
         select: { id: true },
       }),
+      getUnseenStorySet(viewerId, [user.id]),
+      prisma.post.aggregate({ where: { user_id: user.id, status: 'ACTIVE', is_thread: false }, _sum: { like_count: true } }),
+      prisma.user.findUnique({ where: { id: viewerId }, select: { profile_view_enabled: true } }),
     ]);
 
-    return reply.send({ ...user, is_following: !!isFollowing, active_live_session_id: activeLive?.id ?? null });
+    // Record the visit only if the viewer opted into profile-view tracking (reciprocal privacy).
+    if (viewerId !== user.id && viewer?.profile_view_enabled) {
+      prisma.profileView.create({ data: { viewer_id: viewerId, viewed_id: user.id } }).catch(() => {});
+    }
+
+    return reply.send({
+      ...user,
+      like_count: likeSum._sum.like_count ?? 0,
+      is_following: !!isFollowing,
+      active_live_session_id: activeLive?.id ?? null,
+      has_unseen_story: unseenStories.has(user.id),
+    });
+  });
+
+  // ── PROFILE VIEW TRACKING ────────────────────────────────────────────────────
+  app.patch('/me/profile-view-setting', { preHandler: authenticate }, async (req, reply) => {
+    const { enabled } = req.body as { enabled: boolean };
+    await prisma.user.update({ where: { id: req.currentUser!.id }, data: { profile_view_enabled: !!enabled } });
+    return reply.send({ enabled: !!enabled });
+  });
+
+  app.get('/me/profile-views', { preHandler: authenticate }, async (req, reply) => {
+    const userId = req.currentUser!.id;
+    const me = await prisma.user.findUnique({ where: { id: userId }, select: { profile_view_enabled: true, profile_views_checked_at: true } });
+    if (!me?.profile_view_enabled) {
+      return reply.send({ enabled: false, count: 0, items: [] });
+    }
+
+    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const lastCheckedAt = me.profile_views_checked_at;
+
+    const views = await prisma.profileView.findMany({
+      where: { viewed_id: userId, created_at: { gte: since } },
+      orderBy: { created_at: 'desc' },
+      distinct: ['viewer_id'],
+      take: 100,
+      include: { viewer: { select: { id: true, username: true, display_name: true, avatar_url: true, is_verified: true } } },
+    });
+
+    await prisma.user.update({ where: { id: userId }, data: { profile_views_checked_at: new Date() } });
+
+    return reply.send({
+      enabled: true,
+      count: views.length,
+      items: views.map((v) => ({
+        ...v.viewer,
+        viewed_at: v.created_at,
+        is_new: !lastCheckedAt || v.created_at > lastCheckedAt,
+      })),
+    });
+  });
+
+  // ── CREATOR NOTIFICATION SUBSCRIPTION ───────────────────────────────────────
+  app.patch('/:id/follow-notifications', { preHandler: authenticate }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const { notify_post, notify_live, notify_story } = req.body as { notify_post?: boolean; notify_live?: boolean; notify_story?: boolean };
+    const follow = await prisma.follow.findUnique({
+      where: { follower_id_following_id: { follower_id: req.currentUser!.id, following_id: id } },
+    });
+    if (!follow) return reply.status(403).send({ error: 'Vous devez être abonné pour gérer ces notifications.' });
+
+    const data: Record<string, boolean> = {};
+    if (notify_post !== undefined) data.notify_post = notify_post;
+    if (notify_live !== undefined) data.notify_live = notify_live;
+    if (notify_story !== undefined) data.notify_story = notify_story;
+
+    const updated = await prisma.follow.update({
+      where: { follower_id_following_id: { follower_id: req.currentUser!.id, following_id: id } },
+      data,
+    });
+    return reply.send({
+      notify_post: updated.notify_post, notify_live: updated.notify_live, notify_story: updated.notify_story,
+    });
+  });
+
+  app.get('/:id/follow-notifications', { preHandler: authenticate }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const follow = await prisma.follow.findUnique({
+      where: { follower_id_following_id: { follower_id: req.currentUser!.id, following_id: id } },
+    });
+    if (!follow) return reply.status(403).send({ error: 'Not following' });
+    return reply.send({
+      notify_post: follow.notify_post, notify_live: follow.notify_live, notify_story: follow.notify_story,
+    });
   });
 
   app.patch('/me', { preHandler: authenticate }, async (req, reply) => {
@@ -124,7 +212,7 @@ export async function userRoutes(app: FastifyInstance) {
       data: {
         user_id: id,
         type: 'FOLLOW',
-        title: 'Nouvel abonné',
+        title: `${follower?.display_name ?? follower?.username ?? 'Quelqu\'un'} s'est abonné à toi`,
         body: `${follower?.display_name} (@${follower?.username}) s'est abonné à toi`,
         data: { user_id: currentId },
       },

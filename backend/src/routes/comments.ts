@@ -73,7 +73,7 @@ export async function commentRoutes(app: FastifyInstance) {
         data: {
           user_id: post.user_id,
           type: 'COMMENT',
-          title: 'Nouveau commentaire',
+          title: `${comment.user.display_name} a commenté`,
           body: `${comment.user.display_name} : ${parsed.data.content.slice(0, 70)}`,
           data: { post_id: postId, comment_id: comment.id },
         },

@@ -9,6 +9,8 @@ import Posts from './pages/Posts';
 import Reports from './pages/Reports';
 import Tickets from './pages/Tickets';
 import Roadmap from './pages/Roadmap';
+import Comments from './pages/Comments';
+import Settings from './pages/Settings';
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -39,6 +41,8 @@ export default function App() {
           <Route path="posts" element={<Posts />} />
           <Route path="reports" element={<Reports />} />
           <Route path="tickets" element={<Tickets />} />
+          <Route path="comments" element={<Comments />} />
+          <Route path="settings" element={<Settings />} />
           <Route path="roadmap" element={<Roadmap />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />

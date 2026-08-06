@@ -1,10 +1,10 @@
 /**
- * Single-video fullscreen player — opened from profile grid
- * Shows the video with all overlays (like, comment, share, save)
- * Comments open as a bottom sheet
+ * Fullscreen player — opened from profile grid.
+ * If `userId` param passed, loads that user's posts and enables vertical swipe.
+ * Otherwise falls back to single-video mode.
  */
-import React, { useState } from 'react';
-import { View, StyleSheet, StatusBar, TouchableOpacity } from 'react-native';
+import React, { useMemo, useRef, useState, useCallback } from 'react';
+import { View, StyleSheet, StatusBar, TouchableOpacity, FlatList, Dimensions } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useQuery } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -17,21 +17,52 @@ import { COLORS } from '../../constants/theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'VideoPlayer'>;
 
-export default function VideoPlayerScreen({ route, navigation }: Props) {
-  const { postId } = route.params;
-  const insets = useSafeAreaInsets();
-  const [commentsOpen, setCommentsOpen] = useState(false);
+const { height: SCREEN_H } = Dimensions.get('window');
 
-  const { data: post } = useQuery<FeedPost>({
+export default function VideoPlayerScreen({ route, navigation }: Props) {
+  const { postId, userId } = route.params;
+  const insets = useSafeAreaInsets();
+  const [commentsPostId, setCommentsPostId] = useState<string | null>(null);
+  const [activeId, setActiveId] = useState<string>(postId);
+  const flatRef = useRef<FlatList<FeedPost>>(null);
+
+  const { data: singlePost } = useQuery<FeedPost>({
     queryKey: ['post', postId],
-    queryFn: () => api.get(`/posts/${postId}`).then(r => r.data),
+    queryFn: () => api.get(`/posts/${postId}`).then((r) => r.data),
+    enabled: !userId,
   });
+
+  const { data: userPosts } = useQuery<{ items: FeedPost[] }>({
+    queryKey: ['user-posts-swipe', userId],
+    queryFn: () => api.get(`/posts/user/${userId}`).then((r) => r.data),
+    enabled: !!userId,
+  });
+
+  const posts: FeedPost[] = userId ? (userPosts?.items ?? []) : (singlePost ? [singlePost] : []);
+  const initialIndex = useMemo(() => Math.max(0, posts.findIndex((p) => p.id === postId)), [posts, postId]);
+
+  const onViewableItemsChanged = useRef(({ viewableItems }: any) => {
+    if (viewableItems.length > 0 && viewableItems[0].item) {
+      setActiveId(viewableItems[0].item.id);
+    }
+  }).current;
+
+  const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 80 }).current;
+
+  const renderItem = useCallback(({ item }: { item: FeedPost }) => (
+    <View style={{ height: SCREEN_H }}>
+      <VideoPlayerItem
+        post={item}
+        isVisible={activeId === item.id && commentsPostId === null}
+        onComment={() => setCommentsPostId(item.id)}
+      />
+    </View>
+  ), [activeId, commentsPostId]);
 
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
-      {/* Back button */}
       <TouchableOpacity
         style={[styles.backBtn, { top: insets.top + 8 }]}
         onPress={() => navigation.goBack()}
@@ -40,17 +71,27 @@ export default function VideoPlayerScreen({ route, navigation }: Props) {
         <IcBack size={24} color={COLORS.white} />
       </TouchableOpacity>
 
-      {post && (
-        <VideoPlayerItem
-          post={post}
-          isVisible={!commentsOpen}
-          onComment={() => setCommentsOpen(true)}
+      {posts.length > 0 && (
+        <FlatList
+          ref={flatRef}
+          data={posts}
+          keyExtractor={(p) => p.id}
+          renderItem={renderItem}
+          pagingEnabled
+          showsVerticalScrollIndicator={false}
+          initialScrollIndex={initialIndex}
+          getItemLayout={(_, i) => ({ length: SCREEN_H, offset: SCREEN_H * i, index: i })}
+          onViewableItemsChanged={onViewableItemsChanged}
+          viewabilityConfig={viewabilityConfig}
+          removeClippedSubviews
+          windowSize={3}
+          maxToRenderPerBatch={2}
         />
       )}
 
       <CommentsBottomSheet
-        postId={commentsOpen ? postId : null}
-        onClose={() => setCommentsOpen(false)}
+        postId={commentsPostId}
+        onClose={() => setCommentsPostId(null)}
       />
     </View>
   );

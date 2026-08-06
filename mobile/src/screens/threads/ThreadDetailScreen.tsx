@@ -121,7 +121,7 @@ export default function ThreadDetailScreen({ route, navigation }: Props) {
                 Réponses
               </Text>
             </View>
-          ) : threadLoading ? <ActivityIndicator color={COLORS.primary} style={{ marginTop: 20 }} /> : null
+          ) : threadLoading ? <ActivityIndicator color={COLORS.primaryLight} style={{ marginTop: 20 }} /> : null
         }
         renderItem={({ item: t }) => (
           <View style={[styles.replyRow, { backgroundColor: theme.surface, borderBottomColor: theme.borderLight }]}>
@@ -149,7 +149,7 @@ export default function ThreadDetailScreen({ route, navigation }: Props) {
             <View style={styles.empty}>
               <Text style={[styles.emptyText, { color: theme.textMuted }]}>Aucune réponse</Text>
             </View>
-          ) : <ActivityIndicator color={COLORS.primary} style={{ marginTop: 20 }} />
+          ) : <ActivityIndicator color={COLORS.primaryLight} style={{ marginTop: 20 }} />
         }
       />
 

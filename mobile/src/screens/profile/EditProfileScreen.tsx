@@ -20,6 +20,7 @@ export function EditProfileScreen({ onClose }: Props) {
   const [displayName, setDisplayName] = useState(user?.display_name ?? '');
   const [bio, setBio] = useState(user?.bio ?? '');
   const [avatarLoading, setAvatarLoading] = useState(false);
+  const [coverLoading, setCoverLoading] = useState(false);
 
   const mutation = useMutation({
     mutationFn: () => api.patch('/users/me', {
@@ -91,6 +92,42 @@ export function EditProfileScreen({ onClose }: Props) {
   };
 
   const currentAvatar = user?.avatar_url;
+  const currentCover = (user as any)?.cover_url;
+
+  const pickCover = async () => {
+    const result = await launchImageLibrary({ mediaType: 'photo', quality: 0.9 });
+    if (result.didCancel || !result.assets?.[0]?.uri) return;
+
+    setCoverLoading(true);
+    try {
+      const asset = result.assets[0];
+      const tokens = await getTokens();
+      if (!tokens) throw new Error('Non authentifié');
+
+      const formData = new FormData();
+      formData.append('file', { uri: asset.uri, type: asset.type ?? 'image/jpeg', name: 'cover.jpg' } as any);
+
+      const uploadRes = await fetch(`${API_BASE_URL}/upload/image`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${tokens.access}` },
+        body: formData,
+      });
+      if (!uploadRes.ok) {
+        const err = await uploadRes.json().catch(() => ({}));
+        throw new Error(err?.error ?? `Upload error ${uploadRes.status}`);
+      }
+      const { url: cover_url } = await uploadRes.json();
+      if (!cover_url) throw new Error('URL manquante dans la réponse');
+
+      await api.patch('/users/me', { cover_url });
+      updateUser({ cover_url } as any);
+      await loadMe();
+    } catch (e: any) {
+      Alert.alert('Erreur', e?.message ?? 'Impossible de mettre à jour la photo de couverture.');
+    } finally {
+      setCoverLoading(false);
+    }
+  };
 
   return (
     <KeyboardAvoidingView
@@ -117,12 +154,29 @@ export function EditProfileScreen({ onClose }: Props) {
       </View>
 
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        {/* Cover photo */}
+        <TouchableOpacity onPress={pickCover} activeOpacity={0.85} style={styles.coverWrap}>
+          {currentCover ? (
+            <Image key={currentCover} source={{ uri: currentCover }} style={styles.coverImage} />
+          ) : (
+            <View style={[styles.coverImage, styles.coverFallback]} />
+          )}
+          <View style={styles.coverOverlay}>
+            {coverLoading ? <ActivityIndicator color={COLORS.white} size="small" /> : (
+              <>
+                <IcEdit size={14} color={COLORS.white} />
+                <Text style={styles.coverOverlayText}>Modifier la couverture</Text>
+              </>
+            )}
+          </View>
+        </TouchableOpacity>
+
         {/* Avatar */}
         <View style={styles.avatarSection}>
           <TouchableOpacity onPress={handleAvatarPress} activeOpacity={0.85} style={styles.avatarWrap}>
             {avatarLoading ? (
               <View style={[styles.avatar, styles.avatarFallback]}>
-                <ActivityIndicator color={COLORS.primary} />
+                <ActivityIndicator color={COLORS.primaryLight} />
               </View>
             ) : currentAvatar ? (
               <Image
@@ -209,7 +263,16 @@ const styles = StyleSheet.create({
 
   content: { padding: SPACING.md, gap: SPACING.lg },
 
-  avatarSection: { alignItems: 'center', gap: 10 },
+  coverWrap: { position: 'relative', height: 120, borderRadius: RADIUS.md, overflow: 'hidden', marginBottom: -30 },
+  coverImage: { width: '100%', height: '100%' },
+  coverFallback: { backgroundColor: COLORS.primaryBg },
+  coverOverlay: {
+    position: 'absolute', bottom: 0, left: 0, right: 0, top: 0,
+    backgroundColor: 'rgba(0,0,0,0.25)', alignItems: 'center', justifyContent: 'center', gap: 4,
+  },
+  coverOverlayText: { color: COLORS.white, fontSize: FONT.size.xs, fontWeight: FONT.weight.semibold },
+
+  avatarSection: { alignItems: 'center', gap: 10, marginTop: 30 },
   avatarWrap: { position: 'relative' },
   avatar: { width: 88, height: 88, borderRadius: 44 },
   avatarFallback: {

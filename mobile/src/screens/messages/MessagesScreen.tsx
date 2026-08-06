@@ -1,23 +1,24 @@
 import React from 'react';
 import {
   View, Text, FlatList, StyleSheet, TouchableOpacity, Image,
-  ActivityIndicator, RefreshControl, ScrollView,
+  ActivityIndicator, RefreshControl, ScrollView, Alert,
 } from 'react-native';
+import { launchImageLibrary } from 'react-native-image-picker';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { api } from '../../api/client';
+import { api, getTokens } from '../../api/client';
 import { RootStackParamList } from '../../navigation';
-import { COLORS, FONT, SPACING, RADIUS } from '../../constants/theme';
+import { COLORS, FONT, SPACING, RADIUS, API_BASE_URL } from '../../constants/theme';
 import { useTheme } from '../../hooks/useTheme';
 import { IcSearch, IcBell, IcPlus } from '../../components/ui/Icons';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 interface Conversation {
   id: string;
-  other_user: { id: string; username: string; display_name: string; avatar_url: string | null };
+  other_user: { id: string; username: string; display_name: string; avatar_url: string | null; has_unseen_story?: boolean };
   last_message: { content: string; created_at: string; sender_id: string; is_read: boolean } | null;
   updated_at: string;
   unread_count?: number;
@@ -39,7 +40,7 @@ function AvatarCircle({ user, size = 56 }: { user: { display_name: string; avata
   }
   return (
     <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: theme.primaryBg, alignItems: 'center', justifyContent: 'center' }}>
-      <Text style={{ fontSize: size * 0.35, fontWeight: FONT.weight.bold, color: COLORS.primary }}>
+      <Text style={{ fontSize: size * 0.35, fontWeight: FONT.weight.bold, color: theme.tabActive }}>
         {user.display_name[0]?.toUpperCase()}
       </Text>
     </View>
@@ -48,6 +49,29 @@ function AvatarCircle({ user, size = 56 }: { user: { display_name: string; avata
 
 export default function MessagesScreen() {
   const navigation = useNavigation<Nav>();
+  const qc = useQueryClient();
+
+  const createStory = async () => {
+    const result = await launchImageLibrary({ mediaType: 'mixed', quality: 0.9, videoQuality: 'high' });
+    if (!result.assets?.[0]?.uri) return;
+    const asset = result.assets[0];
+    try {
+      const tokens = await getTokens();
+      const fd = new FormData();
+      fd.append('file', { uri: asset.uri, type: asset.type ?? 'image/jpeg', name: asset.fileName ?? 'story.jpg' } as any);
+      const upRes = await fetch(`${API_BASE_URL}/upload/${asset.type?.startsWith('video') ? 'video' : 'image'}`, {
+        method: 'POST', headers: { Authorization: `Bearer ${tokens?.access ?? ''}` }, body: fd as any,
+      });
+      const { url } = await upRes.json();
+      if (!url) throw new Error('Upload failed');
+      const isVideo = asset.type?.startsWith('video');
+      await api.post('/stories', { media_url: url, media_type: isVideo ? 'video' : 'image' });
+      qc.invalidateQueries({ queryKey: ['stories'] });
+      Alert.alert('✓ Story publiée', 'Ta story est en ligne pour 24h.');
+    } catch (e: any) {
+      Alert.alert('Erreur', e?.message ?? 'Upload échoué');
+    }
+  };
   const insets = useSafeAreaInsets();
   const theme = useTheme();
 
@@ -68,6 +92,10 @@ export default function MessagesScreen() {
 
   const goToConversation = (c: Conversation) =>
     navigation.navigate('Conversation', { conversationId: c.id, otherUser: c.other_user });
+
+  const storyQueue = conversations.slice(0, 8).filter(c => c.other_user.has_unseen_story).map(c => c.other_user.id);
+  const openStory = (c: Conversation) =>
+    navigation.navigate('Stories', { userId: c.other_user.id, queueUserIds: storyQueue });
 
   return (
     <View style={[styles.container, { backgroundColor: theme.bg, paddingTop: insets.top }]}>
@@ -94,7 +122,7 @@ export default function MessagesScreen() {
 
       {isLoading ? (
         <View style={styles.center}>
-          <ActivityIndicator color={COLORS.primary} size="large" />
+          <ActivityIndicator color={COLORS.primaryLight} size="large" />
         </View>
       ) : (
         <FlatList
@@ -106,17 +134,26 @@ export default function MessagesScreen() {
             conversations.length > 0 ? (
               <View style={[styles.storySection, { backgroundColor: theme.surface, borderBottomColor: theme.borderLight }]}>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.storyRow}>
-                  {/* Créer */}
-                  <View style={styles.storyItem}>
-                    <View style={[styles.storyCreateCircle, { backgroundColor: theme.primaryBg, borderColor: COLORS.primaryLight }]}>
-                      <IcPlus size={22} color={COLORS.primary} />
+                  {/* Créer story */}
+                  <TouchableOpacity style={styles.storyItem} onPress={createStory} activeOpacity={0.8}>
+                    <View style={[styles.storyCreateCircle, { backgroundColor: theme.primaryBg, borderColor: theme.tabActive }]}>
+                      <IcPlus size={22} color={theme.tabActive} />
                     </View>
                     <Text style={[styles.storyLabel, { color: theme.textMuted }]} numberOfLines={1}>Créer</Text>
-                  </View>
+                  </TouchableOpacity>
                   {/* Conversations actives */}
                   {conversations.slice(0, 8).map(c => (
-                    <TouchableOpacity key={c.id} style={styles.storyItem} onPress={() => goToConversation(c)} activeOpacity={0.8}>
-                      <View style={[styles.storyCircle, (c.unread_count ?? 0) > 0 && { borderColor: COLORS.primary, borderWidth: 2.5 }]}>
+                    <TouchableOpacity
+                      key={c.id}
+                      style={styles.storyItem}
+                      onPress={() => c.other_user.has_unseen_story ? openStory(c) : goToConversation(c)}
+                      activeOpacity={0.8}
+                    >
+                      <View style={[
+                        styles.storyCircle,
+                        (c.unread_count ?? 0) > 0 && { borderColor: theme.tabActive, borderWidth: 2.5 },
+                        c.other_user.has_unseen_story && { borderColor: COLORS.primary, borderWidth: 2.5 },
+                      ]}>
                         <AvatarCircle user={c.other_user} size={52} />
                       </View>
                       <Text style={[styles.storyLabel, { color: theme.text }]} numberOfLines={1}>
@@ -181,7 +218,7 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: SPACING.md, paddingVertical: 12,
+    paddingHorizontal: SPACING.md, paddingVertical: 8,
     borderBottomWidth: 1,
   },
   title: { fontSize: 22, fontWeight: '700' },
@@ -213,7 +250,7 @@ const styles = StyleSheet.create({
 
   row: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
-    paddingHorizontal: SPACING.md, paddingVertical: 12,
+    paddingHorizontal: SPACING.md, paddingVertical: 8,
     borderBottomWidth: 0.5,
   },
   avatarWrap: { position: 'relative' },

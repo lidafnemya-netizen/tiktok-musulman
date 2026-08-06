@@ -22,6 +22,13 @@ enum PostStatus {
   PENDING
   ACTIVE
   REMOVED
+  DRAFT
+}
+
+enum PostVisibility {
+  PUBLIC
+  FOLLOWERS
+  FRIENDS
 }
 
 enum ReportStatus {
@@ -39,6 +46,7 @@ enum NotificationType {
   LIVE_START
   MESSAGE_REQUEST
   MESSAGE_REQUEST_ACCEPTED
+  STORY
   SYSTEM
 }
 
@@ -73,6 +81,8 @@ model User {
   following_count   Int      @default(0)
   post_count        Int      @default(0)
   like_count        Int      @default(0)
+  profile_view_enabled     Boolean   @default(false)
+  profile_views_checked_at DateTime?
   created_at        DateTime @default(now())
   updated_at        DateTime @updatedAt
 
@@ -84,7 +94,14 @@ model User {
   follows_given     Follow[]          @relation("follower")
   follows_received  Follow[]          @relation("following")
   favorites         Favorite[]
+  collections       Collection[]
+  sound_favorites   SoundFavorite[]
+  sound_recents     SoundRecent[]
+  originated_sounds Sound[]
+  story_likes       StoryLike[]
   post_views        PostView[]
+  profile_views_made ProfileView[] @relation("viewer")
+  profile_views_received ProfileView[] @relation("viewed")
   blocked_users     BlockedUser[] @relation("blocker")
   blocked_by        BlockedUser[] @relation("blocked")
   hidden_users      HiddenUser[]  @relation("hider")
@@ -127,6 +144,7 @@ model Post {
   user_id       String
   video_url     String
   thumbnail_url String?
+  media_urls    String[]  @default([])
   caption       String?
   duration      Float
   view_count    Int        @default(0)
@@ -135,6 +153,8 @@ model Post {
   share_count   Int        @default(0)
   status        PostStatus @default(ACTIVE)
   is_public     Boolean    @default(true)
+  visibility    PostVisibility @default(PUBLIC)
+  is_thread     Boolean    @default(false)
   sound_id      String?
   created_at    DateTime   @default(now())
   updated_at    DateTime   @updatedAt
@@ -147,6 +167,7 @@ model Post {
   reply_to      Post?    @relation("thread_replies", fields: [reply_to_id], references: [id])
   replies       Post[]   @relation("thread_replies")
   favorites   Favorite[]
+  collection_items CollectionItem[]
   reports     Report[]
   post_views  PostView[]
   post_categories PostCategory[]
@@ -160,18 +181,48 @@ model Post {
 }
 
 model Sound {
-  id          String   @id @default(uuid())
-  title       String
-  artist      String?
-  url         String
-  duration    Float
-  use_count   Int      @default(0)
-  is_trending Boolean  @default(false)
-  created_at  DateTime @default(now())
+  id             String   @id @default(uuid())
+  title          String
+  artist         String?
+  url            String
+  duration       Float
+  use_count      Int      @default(0)
+  is_trending    Boolean  @default(false)
+  origin_user_id String?
+  created_at     DateTime @default(now())
 
-  posts Post[]
+  posts       Post[]
+  favorites   SoundFavorite[]
+  recents     SoundRecent[]
+  origin_user User?           @relation(fields: [origin_user_id], references: [id], onDelete: SetNull)
 
   @@index([is_trending])
+}
+
+model SoundFavorite {
+  id         String   @id @default(uuid())
+  user_id    String
+  sound_id   String
+  created_at DateTime @default(now())
+
+  user  User  @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  sound Sound @relation(fields: [sound_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, sound_id])
+  @@index([user_id])
+}
+
+model SoundRecent {
+  id        String   @id @default(uuid())
+  user_id   String
+  sound_id  String
+  used_at   DateTime @default(now())
+
+  user  User  @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  sound Sound @relation(fields: [sound_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, sound_id])
+  @@index([user_id])
 }
 
 model Category {
@@ -203,16 +254,31 @@ model Story {
   media_type     String   @default("image")
   duration       Int      @default(5)
   view_count     Int      @default(0)
+  like_count     Int      @default(0)
   expires_at     DateTime
   created_at     DateTime @default(now())
   linked_post_id String?
 
   user        User         @relation(fields: [user_id], references: [id], onDelete: Cascade)
   views       StoryView[]
+  likes       StoryLike[]
   linked_post Post?        @relation("StoryLinkedPost", fields: [linked_post_id], references: [id], onDelete: SetNull)
 
   @@index([user_id])
   @@index([expires_at])
+}
+
+model StoryLike {
+  id         String   @id @default(uuid())
+  story_id   String
+  user_id    String
+  created_at DateTime @default(now())
+
+  story Story @relation(fields: [story_id], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([story_id, user_id])
+  @@index([story_id])
 }
 
 model StoryView {
@@ -263,10 +329,13 @@ model Like {
 }
 
 model Follow {
-  id           String   @id @default(uuid())
-  follower_id  String
-  following_id String
-  created_at   DateTime @default(now())
+  id             String   @id @default(uuid())
+  follower_id    String
+  following_id   String
+  notify_story   Boolean  @default(true)
+  notify_post    Boolean  @default(true)
+  notify_live    Boolean  @default(true)
+  created_at     DateTime @default(now())
 
   follower  User @relation("follower", fields: [follower_id], references: [id], onDelete: Cascade)
   following User @relation("following", fields: [following_id], references: [id], onDelete: Cascade)
@@ -315,6 +384,36 @@ model Favorite {
   @@index([user_id])
 }
 
+model Collection {
+  id          String   @id @default(uuid())
+  user_id     String
+  name        String
+  description String?
+  cover_url   String?
+  is_private  Boolean  @default(false)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  user  User             @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  items CollectionItem[]
+
+  @@index([user_id])
+}
+
+model CollectionItem {
+  id            String   @id @default(uuid())
+  collection_id String
+  post_id       String
+  added_at      DateTime @default(now())
+
+  collection Collection @relation(fields: [collection_id], references: [id], onDelete: Cascade)
+  post       Post       @relation(fields: [post_id], references: [id], onDelete: Cascade)
+
+  @@unique([collection_id, post_id])
+  @@index([collection_id])
+  @@index([post_id])
+}
+
 model PostView {
   id            String   @id @default(uuid())
   user_id       String
@@ -330,6 +429,19 @@ model PostView {
   @@unique([user_id, post_id])
   @@index([user_id])
   @@index([post_id])
+}
+
+model ProfileView {
+  id         String   @id @default(uuid())
+  viewer_id  String
+  viewed_id  String
+  created_at DateTime @default(now())
+
+  viewer User @relation("viewer", fields: [viewer_id], references: [id], onDelete: Cascade)
+  viewed User @relation("viewed", fields: [viewed_id], references: [id], onDelete: Cascade)
+
+  @@index([viewed_id, created_at])
+  @@index([viewer_id])
 }
 
 model Notification {

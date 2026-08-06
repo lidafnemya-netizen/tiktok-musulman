@@ -20,6 +20,8 @@ import { notificationRoutes } from './routes/notifications';
 import { storyRoutes } from './routes/stories';
 import { searchRoutes } from './routes/search';
 import { favoriteRoutes } from './routes/favorites';
+import { collectionRoutes } from './routes/collections';
+import { soundRoutes } from './routes/sounds';
 import { liveRoutes } from './routes/live';
 import { uploadRoutes } from './routes/upload';
 import { adminRoutes } from './routes/admin';
@@ -68,6 +70,8 @@ async function bootstrap() {
   await app.register(storyRoutes, { prefix: '/api/stories' });
   await app.register(searchRoutes, { prefix: '/api/search' });
   await app.register(favoriteRoutes, { prefix: '/api/favorites' });
+  await app.register(collectionRoutes, { prefix: '/api/collections' });
+  await app.register(soundRoutes, { prefix: '/api/sounds' });
   await app.register(liveRoutes, { prefix: '/api/live' });
   await app.register(uploadRoutes, { prefix: '/api/upload' });
   await app.register(adminRoutes, { prefix: '/api/admin' });

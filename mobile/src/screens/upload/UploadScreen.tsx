@@ -122,11 +122,51 @@ export default function UploadScreen() {
     }
   };
 
+  const pickMultiPhotos = async () => {
+    try {
+      const result = await launchImageLibrary({ mediaType: 'photo', selectionLimit: 0, quality: 0.9 });
+      if (result.didCancel || !result.assets?.length) return;
+      setUploading(true);
+      setUploadStep(`Envoi de ${result.assets.length} photo${result.assets.length > 1 ? 's' : ''}...`);
+      const tokens = await getTokens();
+      if (!tokens) throw new Error('Non authentifié');
+      let done = 0;
+      for (const asset of result.assets) {
+        if (!asset.uri) continue;
+        const fd = new FormData();
+        fd.append('file', { uri: asset.uri, type: asset.type ?? 'image/jpeg', name: asset.fileName ?? `photo_${done}.jpg` } as any);
+        const up = await fetch(`${API_BASE_URL}/upload/image`, {
+          method: 'POST', headers: { Authorization: `Bearer ${tokens.access}` }, body: fd,
+        });
+        if (!up.ok) throw new Error(`Upload photo ${done + 1} échoué`);
+        const { url } = await up.json();
+        const full = url.startsWith('http') ? url : `${API_BASE_URL.replace('/api', '')}${url}`;
+        await api.post('/posts', {
+          video_url: full, thumbnail_url: full,
+          caption: caption.trim() || undefined,
+          duration: 0, is_public: true,
+        });
+        done++;
+        setUploadProgress(Math.round((done / result.assets.length) * 100));
+      }
+      qc.invalidateQueries({ queryKey: ['feed'] });
+      qc.invalidateQueries({ queryKey: ['user-posts'] });
+      setCaption('');
+      Alert.alert('✓ Publié !', `${done} photo${done > 1 ? 's publiées' : ' publiée'} dans le Pour toi.`);
+    } catch (e: any) {
+      Alert.alert('Erreur', e?.message ?? 'Upload multi-photos échoué');
+    } finally {
+      setUploading(false);
+      setUploadStep('');
+      setUploadProgress(0);
+    }
+  };
+
   const handlePickPress = () => {
     if (Platform.OS === 'ios') {
       ActionSheetIOS.showActionSheetWithOptions(
-        { options: ['Annuler', 'Galerie Photos', 'Fichiers'], cancelButtonIndex: 0 },
-        (i) => { if (i === 1) pickFromGallery(); if (i === 2) pickFromFiles(); },
+        { options: ['Annuler', 'Vidéo / Photo unique', 'Photos multiples', 'Fichiers'], cancelButtonIndex: 0 },
+        (i) => { if (i === 1) pickFromGallery(); if (i === 2) pickMultiPhotos(); if (i === 3) pickFromFiles(); },
       );
     } else { pickFromFiles(); }
   };
@@ -235,7 +275,7 @@ export default function UploadScreen() {
         animateProgress(0);
         qc.invalidateQueries({ queryKey: ['feed'] });
         qc.invalidateQueries({ queryKey: ['user-posts'] });
-        Alert.alert('✓ Publié !', 'Ta vidéo est en ligne dans le feed.');
+        Alert.alert('✓ Publié !', 'Ta vidéo est en ligne dans le Pour toi.');
       }, 600);
     } catch (err: any) {
       setUploading(false);
@@ -304,7 +344,7 @@ export default function UploadScreen() {
             style={styles.textarea}
             value={caption}
             onChangeText={(t) => handleCaptionChange(t)}
-            onSelectionChange={(e) => handleCaptionChange(caption, e.nativeEvent.selection)}
+            onSelectionChange={(e) => setCursorPos(e.nativeEvent.selection.start)}
             placeholder="Décris ta vidéo... #hashtag @mention"
             placeholderTextColor={COLORS.textPlaceholder}
             multiline

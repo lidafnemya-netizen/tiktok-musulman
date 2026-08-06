@@ -8,10 +8,10 @@ import DocumentPicker, { types, isCancel } from 'react-native-document-picker';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { api } from '../../api/client';
+import { api, getTokens } from '../../api/client';
 import { useAuthStore } from '../../stores/authStore';
 import { RootStackParamList } from '../../navigation';
-import { COLORS, FONT, SPACING, RADIUS } from '../../constants/theme';
+import { COLORS, FONT, SPACING, RADIUS, API_BASE_URL } from '../../constants/theme';
 import { IcClose, IcImage, IcVideo, IcSend } from '../../components/ui/Icons';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ThreadComposer'>;
@@ -23,16 +23,23 @@ interface Media {
   mimeType: string;
 }
 
+interface ExtraImage {
+  uri: string;
+  name: string;
+  mimeType: string;
+}
+
 export default function ThreadComposerScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
   const { user } = useAuthStore();
   const qc = useQueryClient();
   const [text, setText] = useState('');
   const [media, setMedia] = useState<Media | null>(null);
+  const [extras, setExtras] = useState<ExtraImage[]>([]);
   const [uploading, setUploading] = useState(false);
 
   const postMutation = useMutation({
-    mutationFn: async (payload: { content: string; media_url?: string; media_type?: string }) =>
+    mutationFn: async (payload: { content: string; media_url?: string; media_type?: string; media_urls?: string[] }) =>
       api.post('/threads', payload),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['threads'] });
@@ -42,10 +49,13 @@ export default function ThreadComposerScreen({ navigation }: Props) {
   });
 
   const pickImage = async () => {
-    const result = await launchImageLibrary({ mediaType: 'photo', quality: 0.8 });
-    if (result.didCancel || !result.assets?.[0]?.uri) return;
-    const a = result.assets[0];
-    setMedia({ uri: a.uri!, type: 'image', name: a.fileName ?? 'photo.jpg', mimeType: a.type ?? 'image/jpeg' });
+    const result = await launchImageLibrary({ mediaType: 'photo', quality: 0.8, selectionLimit: 0 });
+    if (result.didCancel || !result.assets?.length) return;
+    const assets = result.assets.filter((a) => !!a.uri);
+    if (assets.length === 0) return;
+    const [first, ...rest] = assets;
+    setMedia({ uri: first.uri!, type: 'image', name: first.fileName ?? 'photo.jpg', mimeType: first.type ?? 'image/jpeg' });
+    setExtras(rest.map((a, i) => ({ uri: a.uri!, name: a.fileName ?? `photo_${i}.jpg`, mimeType: a.type ?? 'image/jpeg' })));
   };
 
   const pickVideo = async () => {
@@ -57,25 +67,51 @@ export default function ThreadComposerScreen({ navigation }: Props) {
     }
   };
 
+  const uploadFile = async (uri: string, mimeType: string, name: string, endpoint: string) => {
+    const tokens = await getTokens();
+    if (!tokens) throw new Error('Non authentifié');
+    const fd = new FormData();
+    fd.append('file', { uri, type: mimeType, name } as any);
+    // Plain fetch — axios with a hand-set multipart Content-Type strips the
+    // boundary and breaks upload on iOS; fetch lets it auto-generate one.
+    const res = await fetch(`${API_BASE_URL}${endpoint}`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${tokens.access}` },
+      body: fd as any,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err?.error ?? `Upload échoué (${res.status})`);
+    }
+    const data = await res.json();
+    if (!data.url) throw new Error('URL manquante dans la réponse');
+    return data.url as string;
+  };
+
   const handlePublish = async () => {
     if (!text.trim() && !media) return;
     setUploading(true);
     try {
       let media_url: string | undefined;
       let media_type: string | undefined;
+      const media_urls: string[] = [];
 
       if (media) {
-        const formData = new FormData();
-        formData.append('file', { uri: media.uri, type: media.mimeType, name: media.name } as any);
         const endpoint = media.type === 'image' ? '/upload/image' : '/upload/video';
-        const uploadRes = await api.post(endpoint, formData, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-        });
-        media_url = uploadRes.data.url;
+        media_url = await uploadFile(media.uri, media.mimeType, media.name, endpoint);
         media_type = media.type;
+        if (media_url && media_type === 'image') media_urls.push(media_url);
       }
 
-      await postMutation.mutateAsync({ content: text.trim(), media_url, media_type });
+      for (const extra of extras) {
+        const url = await uploadFile(extra.uri, extra.mimeType, extra.name, '/upload/image');
+        media_urls.push(url);
+      }
+
+      await postMutation.mutateAsync({
+        content: text.trim(), media_url, media_type,
+        media_urls: media_urls.length > 0 ? media_urls : undefined,
+      });
     } catch {
       Alert.alert('Erreur', "Impossible de publier.");
     } finally {
@@ -144,10 +180,25 @@ export default function ThreadComposerScreen({ navigation }: Props) {
                     <Text style={styles.videoName} numberOfLines={1}>{media.name}</Text>
                   </View>
                 )}
-                <TouchableOpacity style={styles.removeMedia} onPress={() => setMedia(null)} activeOpacity={0.8}>
+                <TouchableOpacity style={styles.removeMedia} onPress={() => { setMedia(null); setExtras([]); }} activeOpacity={0.8}>
                   <IcClose size={14} color={COLORS.white} />
                 </TouchableOpacity>
               </View>
+            )}
+            {extras.length > 0 && (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, marginTop: 6 }}>
+                {extras.map((ex, i) => (
+                  <View key={i} style={{ position: 'relative' }}>
+                    <Image source={{ uri: ex.uri }} style={{ width: 80, height: 80, borderRadius: 8 }} />
+                    <TouchableOpacity
+                      style={{ position: 'absolute', top: 4, right: 4, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 10, width: 18, height: 18, alignItems: 'center', justifyContent: 'center' }}
+                      onPress={() => setExtras(prev => prev.filter((_, j) => j !== i))}
+                    >
+                      <IcClose size={10} color={COLORS.white} />
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </ScrollView>
             )}
             <View style={styles.mediaActions}>
               <TouchableOpacity onPress={pickImage} style={styles.mediaBtn} activeOpacity={0.7}>

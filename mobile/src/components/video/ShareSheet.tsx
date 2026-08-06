@@ -11,7 +11,8 @@ import { api } from '../../api/client';
 import { useTheme as useAppTheme } from '../../hooks/useTheme';
 import { COLORS, FONT, SPACING, RADIUS } from '../../constants/theme';
 import {
-  IcClose, IcRepeat, IcFlag, IcDownload, IcLink, IcSend, IcSave, IcMail,
+  IcClose, IcRepeat, IcFlag, IcDownload, IcLink, IcSave, IcMail, IcSearch,
+  IcInstagram, IcWhatsApp,
 } from '../ui/Icons';
 
 const { height: H } = Dimensions.get('window');
@@ -49,11 +50,15 @@ export default function ShareSheet({ post, visible, onClose, onNotInterested }: 
   const [reposted, setReposted] = useState(false);
   const [reportMode, setReportMode] = useState(false);
   const [reportText, setReportText] = useState('');
+  const [searchMode, setSearchMode] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     if (visible) {
       setReportMode(false);
       setReportText('');
+      setSearchMode(false);
+      setSearchQuery('');
       Animated.parallel([
         Animated.spring(slideAnim, { toValue: 0, useNativeDriver: true, damping: 22, stiffness: 200 }),
         Animated.timing(backdropAnim, { toValue: 1, duration: 200, useNativeDriver: true }),
@@ -133,7 +138,7 @@ export default function ShareSheet({ post, visible, onClose, onNotInterested }: 
     }
     try {
       await api.post(`/messages/${contact.conversation_id}`, {
-        content: `📹 ${post.user?.display_name ?? 'Vidéo'}\n${shareLink}`,
+        content: `${post.user?.display_name ?? 'Vidéo'}\n${shareLink}`,
       });
       ReactNativeHapticFeedback.trigger('notificationSuccess', HAPTIC);
       onClose();
@@ -143,15 +148,22 @@ export default function ShareSheet({ post, visible, onClose, onNotInterested }: 
   };
 
   const openWhatsApp = () => {
-    const msg = encodeURIComponent(`Regarde cette vidéo 🌙\n${shareLink}`);
+    const msg = encodeURIComponent(`Regarde cette vidéo\n${shareLink}`);
     Linking.openURL(`whatsapp://send?text=${msg}`).catch(() =>
       Alert.alert('WhatsApp', 'WhatsApp n\'est pas installé.')
     );
   };
 
   const openSMS = () => {
-    const msg = encodeURIComponent(`Regarde cette vidéo 🌙 ${shareLink}`);
+    const msg = encodeURIComponent(`Regarde cette vidéo ${shareLink}`);
     Linking.openURL(Platform.OS === 'ios' ? `sms:&body=${msg}` : `sms:?body=${msg}`).catch(() => null);
+  };
+
+  const openInstagram = () => {
+    Clipboard.setString(shareLink);
+    Linking.openURL('instagram://app').catch(() =>
+      Alert.alert('Instagram', 'Instagram n\'est pas installé. Lien copié dans le presse-papier.')
+    );
   };
 
   const copyLink = () => {
@@ -213,25 +225,44 @@ export default function ShareSheet({ post, visible, onClose, onNotInterested }: 
               <View style={{ height: 24 }} />
             </View>
           ) : (
-            <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
-              {/* Header */}
+            <ScrollView showsVerticalScrollIndicator={false} bounces={false} keyboardShouldPersistTaps="handled">
+              {/* Header — search left, close right */}
               <View style={styles.sheetHeader}>
+                <TouchableOpacity onPress={() => setSearchMode(m => !m)} style={styles.closeBtn} activeOpacity={0.7}>
+                  <IcSearch size={19} color={theme.textMuted} />
+                </TouchableOpacity>
                 <Text style={[styles.sheetTitle, { color: theme.text }]}>Envoyer à</Text>
                 <TouchableOpacity onPress={onClose} style={styles.closeBtn} activeOpacity={0.7}>
                   <IcClose size={20} color={theme.textMuted} />
                 </TouchableOpacity>
               </View>
 
-              {/* Contacts row */}
+              {searchMode && (
+                <View style={[styles.searchWrap, { backgroundColor: theme.card, borderColor: theme.borderLight }]}>
+                  <IcSearch size={16} color={theme.textMuted} />
+                  <TextInput
+                    style={[styles.searchInput, { color: theme.text }]}
+                    placeholder="Rechercher un utilisateur"
+                    placeholderTextColor={theme.textMuted}
+                    value={searchQuery}
+                    onChangeText={setSearchQuery}
+                    autoFocus
+                  />
+                </View>
+              )}
+
+              {/* Amis / conversations récentes */}
               {contacts.length > 0 && (
                 <ScrollView
                   horizontal
                   showsHorizontalScrollIndicator={false}
                   contentContainerStyle={styles.contactsRow}
                 >
-                  {contacts.map(c => (
-                    <ContactCircle key={c.id} contact={c} onPress={() => sendToContact(c)} theme={theme} />
-                  ))}
+                  {contacts
+                    .filter(c => !searchQuery.trim() || c.display_name.toLowerCase().includes(searchQuery.trim().toLowerCase()) || c.username.toLowerCase().includes(searchQuery.trim().toLowerCase()))
+                    .map(c => (
+                      <ContactCircle key={c.id} contact={c} onPress={() => sendToContact(c)} theme={theme} />
+                    ))}
                 </ScrollView>
               )}
 
@@ -239,7 +270,6 @@ export default function ShareSheet({ post, visible, onClose, onNotInterested }: 
 
               {/* App share row */}
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.appRow}>
-                {/* Republier */}
                 <ActionCircle
                   label={reposted ? 'Republié' : 'Republier'}
                   icon={<IcRepeat size={22} color={reposted ? COLORS.primary : theme.text} />}
@@ -247,44 +277,39 @@ export default function ShareSheet({ post, visible, onClose, onNotInterested }: 
                   borderColor={reposted ? COLORS.primary : 'transparent'}
                   onPress={() => repostMutation.mutate()}
                 />
-                {/* Copier */}
                 <ActionCircle
                   label="Copier le lien"
                   icon={<IcLink size={22} color={theme.text} />}
                   bg={theme.card}
                   onPress={copyLink}
                 />
-                {/* WhatsApp */}
                 <ActionCircle
                   label="WhatsApp"
-                  icon={<Text style={styles.emojiIcon}>💬</Text>}
+                  icon={<IcWhatsApp size={22} color="#fff" />}
                   bg="#25D366"
                   onPress={openWhatsApp}
                 />
-                {/* SMS */}
                 <ActionCircle
-                  label="SMS"
+                  label="Message"
                   icon={<IcMail size={22} color="#fff" />}
                   bg="#34C759"
                   onPress={openSMS}
                 />
-                {/* Partager */}
                 <ActionCircle
-                  label="Autres"
-                  icon={<IcSend size={22} color={theme.text} />}
-                  bg={theme.card}
-                  onPress={() => Share.share({ message: `Regarde cette vidéo 🌙\n${shareLink}` })}
+                  label="Instagram"
+                  icon={<IcInstagram size={22} color="#fff" />}
+                  bg="#C13584"
+                  onPress={openInstagram}
                 />
               </ScrollView>
 
               <View style={[styles.divider, { backgroundColor: theme.borderLight }]} />
 
-              {/* Bottom actions */}
-              <View style={styles.bottomActions}>
-                <BottomAction
-                  icon={<IcDownload size={20} color={theme.text} />}
+              {/* Bottom actions — single row, icon + label only */}
+              <View style={styles.bottomRow4}>
+                <ActionColumn
+                  icon={<IcDownload size={21} color={theme.text} />}
                   label="Télécharger"
-                  desc="Sauvegarder dans Photos"
                   onPress={async () => {
                     const url = post.video_url ?? post.thumbnail_url;
                     if (!url) return;
@@ -293,7 +318,7 @@ export default function ShareSheet({ post, visible, onClose, onNotInterested }: 
                       const type = post.video_url ? 'video' : 'photo';
                       await CameraRoll.saveAsset(url, { type });
                       ReactNativeHapticFeedback.trigger('notificationSuccess', HAPTIC);
-                      Alert.alert('Téléchargé !', 'Sauvegardé dans votre galerie Photos.');
+                      Alert.alert('Téléchargé', 'Sauvegardé dans votre galerie Photos.');
                     } catch (err: any) {
                       const msg = err?.message ?? '';
                       if (msg.toLowerCase().includes('permission') || msg.toLowerCase().includes('denied')) {
@@ -307,30 +332,26 @@ export default function ShareSheet({ post, visible, onClose, onNotInterested }: 
                   }}
                   theme={theme}
                 />
-                <BottomAction
-                  icon={<IcSave size={20} color={theme.text} />}
-                  label="Ajouter à la Story"
-                  desc="Visible 24h sur votre profil"
-                  onPress={() => addToStoryMutation.mutate()}
-                  loading={addToStoryMutation.isPending}
-                  theme={theme}
-                />
-                <BottomAction
-                  icon={<IcFlag size={20} color={theme.text} />}
+                <ActionColumn
+                  icon={<IcFlag size={21} color={theme.text} />}
                   label="Signaler"
-                  desc="Envoyer un signalement"
                   onPress={() => setReportMode(true)}
                   theme={theme}
                 />
-                <BottomAction
-                  icon={<IcClose size={20} color={COLORS.error} />}
-                  label="Pas intéressé(e)"
-                  desc="Ne plus voir ce contenu"
+                <ActionColumn
+                  icon={<IcClose size={21} color={COLORS.error} />}
+                  label="Pas intéressé"
                   onPress={() => notInterestedMutation.mutate()}
                   loading={notInterestedMutation.isPending}
                   theme={theme}
                   destructive
-                  last
+                />
+                <ActionColumn
+                  icon={<IcSave size={21} color={theme.text} />}
+                  label="Story"
+                  onPress={() => addToStoryMutation.mutate()}
+                  loading={addToStoryMutation.isPending}
+                  theme={theme}
                 />
               </View>
 
@@ -383,26 +404,20 @@ function ActionCircle({
   );
 }
 
-function BottomAction({
-  icon, label, desc, onPress, theme, last, loading, destructive,
+function ActionColumn({
+  icon, label, onPress, theme, loading, destructive,
 }: {
-  icon: React.ReactNode; label: string; desc?: string;
-  onPress: () => void; theme: ReturnType<typeof useAppTheme>;
-  last?: boolean; loading?: boolean; destructive?: boolean;
+  icon: React.ReactNode; label: string; onPress: () => void;
+  theme: ReturnType<typeof useAppTheme>; loading?: boolean; destructive?: boolean;
 }) {
   return (
-    <TouchableOpacity
-      style={[styles.bottomRow, { borderBottomWidth: last ? 0 : StyleSheet.hairlineWidth, borderBottomColor: theme.borderLight }]}
-      onPress={onPress}
-      activeOpacity={0.75}
-      disabled={loading}
-    >
-      <View style={[styles.bottomIconWrap, { backgroundColor: destructive ? '#FEF2F2' : theme.card }]}>{icon}</View>
-      <View style={{ flex: 1 }}>
-        <Text style={[styles.bottomLabel, { color: destructive ? COLORS.error : theme.text }]}>{label}</Text>
-        {desc && <Text style={[styles.bottomDesc, { color: theme.textMuted }]}>{desc}</Text>}
+    <TouchableOpacity style={styles.actionCol} onPress={onPress} activeOpacity={0.75} disabled={loading}>
+      <View style={[styles.actionColIcon, { backgroundColor: destructive ? '#FEF2F2' : theme.card }]}>
+        {loading ? <ActivityIndicator size="small" color={theme.primary} /> : icon}
       </View>
-      {loading && <ActivityIndicator size="small" color={theme.primary} style={{ marginLeft: 8 }} />}
+      <Text style={[styles.actionColLabel, { color: destructive ? COLORS.error : theme.text }]} numberOfLines={1}>
+        {label}
+      </Text>
     </TouchableOpacity>
   );
 }
@@ -423,6 +438,12 @@ const styles = StyleSheet.create({
   },
   sheetTitle: { fontSize: FONT.size.lg, fontWeight: '700' },
   closeBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
+  searchWrap: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    marginHorizontal: SPACING.md, marginBottom: 8,
+    borderWidth: 1, borderRadius: RADIUS.md, paddingHorizontal: 12, paddingVertical: 9,
+  },
+  searchInput: { flex: 1, fontSize: FONT.size.sm, padding: 0 },
   contactsRow: { paddingVertical: 12, gap: 16, paddingHorizontal: SPACING.md },
   contactItem: { alignItems: 'center', width: 64, gap: 6 },
   contactAvatar: {
@@ -437,19 +458,13 @@ const styles = StyleSheet.create({
   actionItem: { alignItems: 'center', width: 68, gap: 8 },
   actionCircle: { width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
   actionLabel: { fontSize: 11, textAlign: 'center', lineHeight: 14 },
-  emojiIcon: { fontSize: 24 },
-  emojiAction: { fontSize: 20 },
-  bottomActions: { paddingHorizontal: SPACING.md },
-  bottomRow: {
-    flexDirection: 'row', alignItems: 'center', paddingVertical: 14,
-    gap: 14, borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  bottomIconWrap: {
-    width: 40, height: 40, borderRadius: 20,
+  bottomRow4: { flexDirection: 'row', paddingHorizontal: SPACING.md, paddingVertical: 14 },
+  actionCol: { flex: 1, alignItems: 'center', gap: 6 },
+  actionColIcon: {
+    width: 48, height: 48, borderRadius: 24,
     alignItems: 'center', justifyContent: 'center',
   },
-  bottomLabel: { fontSize: FONT.size.base, fontWeight: '500' },
-  bottomDesc: { fontSize: FONT.size.xs, marginTop: 2 },
+  actionColLabel: { fontSize: 11, fontWeight: '500', textAlign: 'center' },
 
   // Report
   reportPane: { paddingHorizontal: SPACING.md, paddingBottom: SPACING.md },

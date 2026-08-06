@@ -1,23 +1,32 @@
 import { FastifyInstance } from 'fastify';
 import { prisma } from '../config/database';
 import { authenticate } from '../middleware/auth';
+import { getUnseenStorySet } from '../lib/stories';
 import { z } from 'zod';
 
 const createPostSchema = z.object({
   caption: z.string().max(500).optional(),
-  video_url: z.string().min(1),
+  video_url: z.string(),
   thumbnail_url: z.string().optional(),
+  media_urls: z.array(z.string().url()).max(10).optional(),
   duration: z.number().min(0),
   sound_id: z.string().uuid().optional(),
   category_ids: z.array(z.string().uuid()).optional(),
   is_public: z.boolean().default(true),
+  visibility: z.enum(['PUBLIC', 'FOLLOWERS', 'FRIENDS']).default('PUBLIC'),
+  is_draft: z.boolean().default(false),
 });
 
 const POST_INCLUDE = {
   user: {
     select: { id: true, username: true, display_name: true, avatar_url: true, is_verified: true },
   },
-  sound: { select: { id: true, title: true, artist: true, url: true } },
+  sound: {
+    select: {
+      id: true, title: true, artist: true, url: true,
+      origin_user: { select: { id: true, username: true, avatar_url: true } },
+    },
+  },
   post_categories: { include: { category: { select: { id: true, name: true, slug: true } } } },
 } as const;
 
@@ -73,7 +82,9 @@ async function buildFeedItems(userId: string, seenIds: string[], poolSize = 80) 
 
   const posts = await prisma.post.findMany({
     where: {
-      video_url: { not: '' },
+      is_thread: false,
+      user_id: { not: userId },
+      status: 'ACTIVE',
       NOT: [
         ...(seenIds.length > 0 ? [{ id: { in: seenIds } }] : []),
         { not_interested: { some: { user_id: userId } } },
@@ -87,7 +98,27 @@ async function buildFeedItems(userId: string, seenIds: string[], poolSize = 80) 
     },
   });
 
-  const scored = posts.map(p => {
+  // Restricted-visibility posts (FOLLOWERS/FRIENDS) only show to eligible viewers
+  const restrictedAuthorIds = [...new Set(posts.filter(p => p.visibility !== 'PUBLIC').map(p => p.user_id))];
+  let followingSet = new Set<string>();
+  let friendSet = new Set<string>();
+  if (restrictedAuthorIds.length > 0) {
+    const [viewerFollows, authorFollowsBack] = await Promise.all([
+      prisma.follow.findMany({ where: { follower_id: userId, following_id: { in: restrictedAuthorIds } }, select: { following_id: true } }),
+      prisma.follow.findMany({ where: { follower_id: { in: restrictedAuthorIds }, following_id: userId }, select: { follower_id: true } }),
+    ]);
+    followingSet = new Set(viewerFollows.map(f => f.following_id));
+    const followsBackSet = new Set(authorFollowsBack.map(f => f.follower_id));
+    friendSet = new Set([...followingSet].filter(id => followsBackSet.has(id)));
+  }
+  const visiblePosts = posts.filter(p => {
+    if (p.visibility === 'PUBLIC') return true;
+    if (p.visibility === 'FOLLOWERS') return followingSet.has(p.user_id);
+    if (p.visibility === 'FRIENDS') return friendSet.has(p.user_id);
+    return true;
+  });
+
+  const scored = visiblePosts.map(p => {
     const postCats = new Set(p.post_categories.map(pc => pc.category_id));
     const boost = preferredCats.size > 0 && [...postCats].some(c => preferredCats.has(c)) ? 1.5 : 1.0;
     return { post: p, score: engagementScore(p, boost) };
@@ -114,7 +145,7 @@ export async function postRoutes(app: FastifyInstance) {
     const posts = await prisma.post.findMany({
       where: {
         user_id: { in: ids },
-        video_url: { not: '' },
+        is_thread: false,
         ...(cursor ? { id: { lt: cursor } } : {}),
       },
       take: lim + 1,
@@ -128,7 +159,7 @@ export async function postRoutes(app: FastifyInstance) {
     const hasMore = posts.length > lim;
     const items = hasMore ? posts.slice(0, lim) : posts;
 
-    const [likedIds, savedIds] = await Promise.all([
+    const [likedIds, savedIds, unseenStories] = await Promise.all([
       prisma.like.findMany({
         where: { user_id: userId, post_id: { in: items.map(p => p.id) } },
         select: { post_id: true },
@@ -137,6 +168,7 @@ export async function postRoutes(app: FastifyInstance) {
         where: { user_id: userId, post_id: { in: items.map(p => p.id) } },
         select: { post_id: true },
       }),
+      getUnseenStorySet(userId, items.map(p => p.user.id)),
     ]);
     const likedSet = new Set(likedIds.map(l => l.post_id));
     const savedSet = new Set(savedIds.map(s => s.post_id));
@@ -145,7 +177,7 @@ export async function postRoutes(app: FastifyInstance) {
       items: items.map(p => ({
         ...p, is_liked: likedSet.has(p.id), is_saved: savedSet.has(p.id),
         like_count: p.like_count, comment_count: p.comment_count,
-        user: { ...p.user, is_following: true },
+        user: { ...p.user, is_following: true, has_unseen_story: unseenStories.has(p.user.id) },
       })),
       next_cursor: hasMore ? items[items.length - 1].id : null,
     });
@@ -173,7 +205,7 @@ export async function postRoutes(app: FastifyInstance) {
     const items = hasMore ? page.slice(0, lim) : page;
 
     const userIds = [...new Set(items.map(p => p.user.id))];
-    const [likedIds, savedIds, followedIds] = await Promise.all([
+    const [likedIds, savedIds, followedIds, unseenStories] = await Promise.all([
       prisma.like.findMany({
         where: { user_id: req.currentUser!.id, post_id: { in: items.map(p => p.id) } },
         select: { post_id: true },
@@ -186,6 +218,7 @@ export async function postRoutes(app: FastifyInstance) {
         where: { follower_id: req.currentUser!.id, following_id: { in: userIds } },
         select: { following_id: true },
       }),
+      getUnseenStorySet(req.currentUser!.id, userIds),
     ]);
     const likedSet = new Set(likedIds.map(l => l.post_id));
     const savedSet = new Set(savedIds.map(s => s.post_id));
@@ -199,7 +232,7 @@ export async function postRoutes(app: FastifyInstance) {
       is_saved: savedSet.has(p.id),
       categories: p.post_categories.map(pc => pc.category),
       post_categories: undefined,
-      user: { ...p.user, is_following: followedSet.has(p.user.id) },
+      user: { ...p.user, is_following: followedSet.has(p.user.id), has_unseen_story: unseenStories.has(p.user.id) },
     }));
 
     return reply.send({ items: result, next_cursor: hasMore ? items[items.length - 1].id : null });
@@ -212,7 +245,7 @@ export async function postRoutes(app: FastifyInstance) {
     const userId = req.currentUser!.id;
 
     const where: Record<string, unknown> = {
-      video_url: { not: '' }, status: 'ACTIVE', is_public: true,
+      is_thread: false, status: 'ACTIVE', is_public: true,
       NOT: { not_interested: { some: { user_id: userId } } },
     };
 
@@ -244,10 +277,11 @@ export async function postRoutes(app: FastifyInstance) {
 
     const itemPosts = items.map(s => s.post);
     const userIds = [...new Set(itemPosts.map(p => p.user.id))];
-    const [likedIds, savedIds, followedIds] = await Promise.all([
+    const [likedIds, savedIds, followedIds, unseenStories] = await Promise.all([
       prisma.like.findMany({ where: { user_id: userId, post_id: { in: itemPosts.map(p => p.id) } }, select: { post_id: true } }),
       prisma.favorite.findMany({ where: { user_id: userId, post_id: { in: itemPosts.map(p => p.id) } }, select: { post_id: true } }),
       prisma.follow.findMany({ where: { follower_id: userId, following_id: { in: userIds } }, select: { following_id: true } }),
+      getUnseenStorySet(userId, userIds),
     ]);
     const likedSet = new Set(likedIds.map(l => l.post_id));
     const savedSet = new Set(savedIds.map(s => s.post_id));
@@ -260,7 +294,7 @@ export async function postRoutes(app: FastifyInstance) {
         is_saved: savedSet.has(p.id),
         categories: p.post_categories.map(pc => pc.category),
         post_categories: undefined,
-        user: { ...p.user, is_following: followedSet.has(p.user.id) },
+        user: { ...p.user, is_following: followedSet.has(p.user.id), has_unseen_story: unseenStories.has(p.user.id) },
       })),
       next_cursor: hasMore ? items[items.length - 1].post.id : null,
     });
@@ -272,17 +306,20 @@ export async function postRoutes(app: FastifyInstance) {
     const { watch_time = 0, completed = false } = req.body as { watch_time?: number; completed?: boolean };
     const userId = req.currentUser!.id;
 
-    await prisma.post.update({
-      where: { id },
-      data: { view_count: { increment: 1 } },
+    const existingView = await prisma.postView.findUnique({
+      where: { user_id_post_id: { user_id: userId, post_id: id } },
+    });
+
+    await prisma.postView.upsert({
+      where: { user_id_post_id: { user_id: userId, post_id: id } },
+      create: { user_id: userId, post_id: id, watch_time_ms: Math.round(watch_time * 1000), completed },
+      update: { watch_time_ms: { increment: Math.round(watch_time * 1000) }, completed: completed || undefined },
     }).catch(() => {});
 
-    // Store watch time for personalization algo
-    if (watch_time > 0) {
-      await prisma.postView.upsert({
-        where: { user_id_post_id: { user_id: userId, post_id: id } },
-        create: { user_id: userId, post_id: id, watch_time_ms: Math.round(watch_time * 1000), completed },
-        update: { watch_time_ms: { increment: Math.round(watch_time * 1000) }, completed: completed || undefined },
+    if (!existingView) {
+      await prisma.post.update({
+        where: { id },
+        data: { view_count: { increment: 1 } },
       }).catch(() => {});
     }
 
@@ -294,11 +331,11 @@ export async function postRoutes(app: FastifyInstance) {
     const parsed = createPostSchema.safeParse(req.body);
     if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() });
 
-    const { category_ids, ...data } = parsed.data;
+    const { category_ids, is_draft, ...data } = parsed.data;
 
     const post = await prisma.$transaction(async (tx) => {
       const p = await tx.post.create({
-        data: { ...data, user_id: req.currentUser!.id },
+        data: { ...data, status: is_draft ? 'DRAFT' : 'ACTIVE', user_id: req.currentUser!.id },
       });
       if (category_ids?.length) {
         await tx.postCategory.createMany({
@@ -306,10 +343,19 @@ export async function postRoutes(app: FastifyInstance) {
           skipDuplicates: true,
         });
       }
-      await tx.user.update({
-        where: { id: req.currentUser!.id },
-        data: { post_count: { increment: 1 } },
-      });
+      if (!is_draft) {
+        await tx.user.update({
+          where: { id: req.currentUser!.id },
+          data: { post_count: { increment: 1 } },
+        });
+      }
+      // First post to use this sound claims it as the sound's origin.
+      if (data.sound_id) {
+        await tx.sound.updateMany({
+          where: { id: data.sound_id, origin_user_id: null },
+          data: { origin_user_id: req.currentUser!.id },
+        });
+      }
       return p;
     });
 
@@ -324,8 +370,6 @@ export async function postRoutes(app: FastifyInstance) {
       include: { ...POST_INCLUDE, _count: { select: { likes: true, comments: true } } },
     });
     if (!post) return reply.status(404).send({ error: 'Post not found' });
-
-    await prisma.post.update({ where: { id }, data: { view_count: { increment: 1 } } });
 
     const [isLiked, isSaved] = await Promise.all([
       prisma.like.findUnique({
@@ -386,13 +430,14 @@ export async function postRoutes(app: FastifyInstance) {
     ]);
 
     if (post.user_id !== userId) {
-      const liker = await prisma.user.findUnique({ where: { id: userId }, select: { display_name: true } });
+      const liker = await prisma.user.findUnique({ where: { id: userId }, select: { display_name: true, username: true } });
+      const name = liker?.display_name ?? liker?.username ?? 'Quelqu\'un';
       await prisma.notification.create({
         data: {
           user_id: post.user_id,
           type: 'LIKE',
-          title: 'Nouveau like',
-          body: `${liker?.display_name ?? 'Quelqu\'un'} a aimé ta publication`,
+          title: `${name} a aimé ta vidéo`,
+          body: `${name} a aimé ta publication`,
           data: { post_id: id, user_id: userId },
         },
       }).catch(() => {});
@@ -406,12 +451,12 @@ export async function postRoutes(app: FastifyInstance) {
     const userId = req.currentUser!.id;
     const { cursor, limit = '12' } = req.query as { cursor?: string; limit?: string };
 
-    // Only real video posts (exclude threads: video_url != '')
+    // Only real posts, exclude threads
     const likes = await prisma.like.findMany({
       where: {
         user_id: userId,
         post_id: { not: null },
-        post: { video_url: { not: '' } },
+        post: { is_thread: false },
       },
       take: parseInt(limit) + 1,
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
@@ -466,20 +511,62 @@ export async function postRoutes(app: FastifyInstance) {
     const { userId } = req.params as { userId: string };
     const { cursor, limit = '12' } = req.query as { cursor?: string; limit?: string };
 
+    const viewerId = req.currentUser!.id;
+    const isOwner = viewerId === userId;
+    const postSelect = {
+      id: true, thumbnail_url: true, video_url: true, media_urls: true,
+      caption: true, duration: true, view_count: true, visibility: true,
+      like_count: true, comment_count: true, created_at: true, status: true,
+      user: { select: { id: true, username: true, display_name: true, avatar_url: true, is_verified: true } },
+      sound: {
+        select: {
+          id: true, title: true, artist: true, url: true,
+          origin_user: { select: { id: true, username: true, avatar_url: true } },
+        },
+      },
+    } as const;
+
+    // Drafts are visible only to the owner, always pinned as the first slots
+    const drafts = (isOwner && !cursor)
+      ? await prisma.post.findMany({
+          where: { user_id: userId, is_thread: false, status: 'DRAFT' },
+          orderBy: { created_at: 'desc' },
+          select: postSelect,
+        })
+      : [];
+
     const posts = await prisma.post.findMany({
-      where: { user_id: userId, video_url: { not: '' } },
+      where: { user_id: userId, is_thread: false, status: 'ACTIVE' },
       take: parseInt(limit) + 1,
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
       orderBy: { created_at: 'desc' },
-      select: {
-        id: true, thumbnail_url: true, video_url: true, view_count: true,
-        like_count: true, comment_count: true, created_at: true,
-      },
+      select: postSelect,
     });
 
     const hasMore = posts.length > parseInt(limit);
     const items = hasMore ? posts.slice(0, -1) : posts;
-    return reply.send({ items, next_cursor: hasMore ? items[items.length - 1].id : null });
+    const allItems = [...drafts, ...items];
+
+    const [likedIds, savedIds, isFollowing, unseenStories] = await Promise.all([
+      prisma.like.findMany({ where: { user_id: viewerId, post_id: { in: allItems.map(p => p.id) } }, select: { post_id: true } }),
+      prisma.favorite.findMany({ where: { user_id: viewerId, post_id: { in: allItems.map(p => p.id) } }, select: { post_id: true } }),
+      isOwner ? Promise.resolve(false) : prisma.follow.findUnique({ where: { follower_id_following_id: { follower_id: viewerId, following_id: userId } } }).then(Boolean),
+      getUnseenStorySet(viewerId, [userId]),
+    ]);
+    const likedSet = new Set(likedIds.map(l => l.post_id));
+    const savedSet = new Set(savedIds.map(s => s.post_id));
+    const hasUnseenStory = unseenStories.has(userId);
+
+    return reply.send({
+      items: allItems.map(p => ({
+        ...p,
+        is_draft: p.status === 'DRAFT',
+        is_liked: likedSet.has(p.id),
+        is_saved: savedSet.has(p.id),
+        user: { ...p.user, is_following: isFollowing, has_unseen_story: hasUnseenStory },
+      })),
+      next_cursor: hasMore ? items[items.length - 1].id : null,
+    });
   });
 
   // ── REPOST ──────────────────────────────────────────────────────────
