@@ -32,6 +32,7 @@ interface Post {
   share_count: number;
   video_url?: string;
   thumbnail_url?: string | null;
+  media_urls?: string[];
   user?: { display_name?: string };
 }
 
@@ -83,8 +84,8 @@ export default function ShareSheet({ post, visible, onClose, onNotInterested }: 
     onSuccess: (data) => {
       setReposted(data.reposted);
       ReactNativeHapticFeedback.trigger('impactMedium', HAPTIC);
-      qc.invalidateQueries({ queryKey: ['feed'] });
-      qc.invalidateQueries({ queryKey: ['trending'] });
+      // Don't invalidate 'feed' — it would re-fetch and reorder/replace what's
+      // currently on screen mid-scroll. Repost is a local toggle only.
       qc.invalidateQueries({ queryKey: ['post', post.id] });
     },
   });
@@ -100,8 +101,9 @@ export default function ShareSheet({ post, visible, onClose, onNotInterested }: 
 
   const addToStoryMutation = useMutation({
     mutationFn: () => {
-      const mediaUrl = post.thumbnail_url ?? post.video_url ?? '';
-      const mediaType = post.video_url ? 'video' : 'image';
+      const isVideo = !!post.video_url;
+      const mediaUrl = isVideo ? post.video_url : (post.thumbnail_url ?? post.media_urls?.[0] ?? '');
+      const mediaType = isVideo ? 'video' : 'image';
       return api.post('/stories', { media_url: mediaUrl, media_type: mediaType, linked_post_id: post.id }).then(r => r.data);
     },
     onSuccess: () => {

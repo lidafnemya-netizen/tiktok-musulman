@@ -203,10 +203,13 @@ export default function ProfileScreen() {
     : false;
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top, backgroundColor: theme.bg }]}>
+    <View style={[styles.container, { backgroundColor: theme.bg }]}>
       <Modal visible={editVisible} animationType="slide" presentationStyle="pageSheet">
         <EditProfileScreen onClose={() => { setEditVisible(false); qc.invalidateQueries({ queryKey: ['me'] }); }} />
       </Modal>
+
+      {/* Status-bar strip filled with header color so there's no beige seam */}
+      <View style={{ height: insets.top, backgroundColor: theme.surface }} />
 
       <ScrollView
         contentContainerStyle={styles.content}
@@ -215,7 +218,7 @@ export default function ProfileScreen() {
       >
         {/* Top bar */}
         <View style={[styles.topBar, { backgroundColor: theme.surface, borderBottomColor: theme.borderLight }]}>
-          <Text style={[styles.topUsername, { color: theme.text }]}>@{user.username}</Text>
+          <Text style={[styles.topUsername, { color: theme.text }]} numberOfLines={1}>@{user.username}</Text>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.navigate('ProfileViews')} activeOpacity={0.7}>
               <IcEye size={22} color={theme.textMuted} />

@@ -88,6 +88,7 @@ async function buildFeedItems(userId: string, seenIds: string[], poolSize = 80) 
       NOT: [
         ...(seenIds.length > 0 ? [{ id: { in: seenIds } }] : []),
         { not_interested: { some: { user_id: userId } } },
+        { post_views: { some: { user_id: userId } } },
       ],
     },
     take: poolSize,

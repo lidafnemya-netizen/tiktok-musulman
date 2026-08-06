@@ -60,7 +60,8 @@ export default function ProfileViewsScreen() {
   const enabled = user?.profile_view_enabled ?? false;
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.bg, paddingTop: insets.top }]}>
+    <View style={[styles.container, { backgroundColor: theme.bg }]}>
+      <View style={{ height: insets.top, backgroundColor: theme.surface }} />
       <View style={[styles.header, { backgroundColor: theme.surface, borderBottomColor: theme.borderLight }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn} activeOpacity={0.7}>
           <IcBack size={24} color={theme.text} />

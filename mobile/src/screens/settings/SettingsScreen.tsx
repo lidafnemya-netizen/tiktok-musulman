@@ -156,7 +156,8 @@ export default function SettingsScreen({ navigation }: Props) {
   if (!loaded) return <View style={{ flex: 1, backgroundColor: theme.bg }} />;
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.bg, paddingTop: insets.top }}>
+    <View style={{ flex: 1, backgroundColor: theme.bg }}>
+      <View style={{ height: insets.top, backgroundColor: theme.surface }} />
       {/* Changelog modal */}
       <Modal visible={changelogModal} transparent animationType="slide" onRequestClose={() => setChangelogModal(false)}>
         <View style={styles.modalOverlay}>

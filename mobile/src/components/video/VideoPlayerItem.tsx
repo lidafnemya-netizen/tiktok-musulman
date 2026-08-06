@@ -16,10 +16,11 @@ import { RootStackParamList } from '../../navigation';
 import { COLORS, FONT, RADIUS } from '../../constants/theme';
 import {
   IcHeartFill, IcHeart, IcComment, IcShare, IcSave, IcSaveFill,
-  IcMusic, IcPlay, IcCheck, IcMaximize, IcRepeat,
+  IcMusic, IcPlay, IcPause, IcCheck, IcMaximize, IcRepeat,
   IcClose, IcProfile,
 } from '../ui/Icons';
 import ShareSheet from './ShareSheet';
+import UserProfileScreen from '../../screens/profile/UserProfileScreen';
 
 const { width: W, height: H } = Dimensions.get('window');
 
@@ -87,6 +88,39 @@ export function VideoPlayerItem({ post, isVisible, onComment, onNotInterested, i
   const [progress, setProgress] = useState(0); // 0–1
   const [soundSheetVisible, setSoundSheetVisible] = useState(false);
   const [isHorizontal, setIsHorizontal] = useState(false);
+  const [fullscreen, setFullscreen] = useState(false);
+  const [fsPaused, setFsPaused] = useState(false);
+  const [fsShowControls, setFsShowControls] = useState(true);
+  const [fsProgress, setFsProgress] = useState(0);
+  const fsHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fsVideoRef = useRef<VideoRef>(null);
+
+  const openFullscreen = useCallback(() => {
+    setPaused(true);
+    setFsPaused(false);
+    setFsShowControls(true);
+    setFullscreen(true);
+  }, []);
+
+  const closeFullscreen = useCallback(() => {
+    setFullscreen(false);
+    setPaused(!isVisible);
+  }, [isVisible]);
+
+  const toggleFsControls = useCallback(() => {
+    setFsShowControls(v => {
+      const next = !v;
+      if (fsHideTimerRef.current) clearTimeout(fsHideTimerRef.current);
+      if (next) fsHideTimerRef.current = setTimeout(() => setFsShowControls(false), 3000);
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!fullscreen) return;
+    fsHideTimerRef.current = setTimeout(() => setFsShowControls(false), 3000);
+    return () => { if (fsHideTimerRef.current) clearTimeout(fsHideTimerRef.current); };
+  }, [fullscreen]);
   const [shareSheetVisible, setShareSheetVisible] = useState(false);
 
   // Vinyl spinning animation
@@ -549,7 +583,7 @@ export function VideoPlayerItem({ post, isVisible, onComment, onNotInterested, i
       {isHorizontal && (
         <TouchableOpacity
           style={styles.fullscreenBtn}
-          onPress={() => (videoRef.current as any)?.presentFullscreenPlayer?.()}
+          onPress={openFullscreen}
           activeOpacity={0.85}
         >
           <IcMaximize size={14} color={COLORS.white} />
@@ -706,7 +740,50 @@ export function VideoPlayerItem({ post, isVisible, onComment, onNotInterested, i
         onNotInterested={onNotInterested}
       />
 
-      {/* Profile Panel — slides in from right on left-swipe */}
+      {/* Custom fullscreen — rotates the video sideways in-app, no OS rotation, no nav/bars */}
+      {fullscreen && (
+        <Modal visible transparent statusBarTranslucent animationType="fade" onRequestClose={closeFullscreen}>
+          <View style={styles.fsRoot}>
+            <View style={[styles.fsInner, { width: H, height: W }]}>
+              <Pressable style={StyleSheet.absoluteFill} onPress={toggleFsControls}>
+                <Video
+                  ref={fsVideoRef}
+                  source={{ uri: post.video_url }}
+                  style={StyleSheet.absoluteFill}
+                  resizeMode="contain"
+                  paused={fsPaused}
+                  repeat
+                  onLoad={() => fsVideoRef.current?.seek(progress * totalDurationRef.current)}
+                  onProgress={({ currentTime, seekableDuration }) => {
+                    if (seekableDuration > 0) setFsProgress(currentTime / seekableDuration);
+                  }}
+                />
+              </Pressable>
+              {fsShowControls && (
+                <>
+                  <TouchableOpacity style={styles.fsCloseBtn} onPress={closeFullscreen} activeOpacity={0.8}>
+                    <IcClose size={22} color={COLORS.white} />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.fsPlayBtn}
+                    onPress={() => setFsPaused(p => !p)}
+                    activeOpacity={0.8}
+                  >
+                    {fsPaused
+                      ? <IcPlay size={30} color={COLORS.white} />
+                      : <IcPause size={30} color={COLORS.white} />}
+                  </TouchableOpacity>
+                  <View style={styles.fsProgressTrack}>
+                    <View style={[styles.fsProgressFill, { width: `${Math.round(fsProgress * 100)}%` }]} />
+                  </View>
+                </>
+              )}
+            </View>
+          </View>
+        </Modal>
+      )}
+
+      {/* Real profile screen — slides in from right on left-swipe, following the finger */}
       {panelOpen && (
         <>
           <Animated.View
@@ -718,15 +795,12 @@ export function VideoPlayerItem({ post, isVisible, onComment, onNotInterested, i
           <Animated.View
             style={[styles.profilePanel, { transform: [{ translateX: panelX }] }]}
           >
-            <UserProfilePanel
-              user={post.user}
-              following={following}
-              onFollow={() => { setFollowing(f => !f); followMutation.mutate(); }}
-              onClose={closeProfilePanel}
-              onViewFull={() => {
-                closeProfilePanel();
-                setTimeout(() => nav.navigate('UserProfile', { userId: post.user.id, username: post.user.username }), 200);
-              }}
+            <UserProfileScreen
+              route={{ key: 'embedded-profile', name: 'UserProfile', params: { userId: post.user.id, username: post.user.username } } as any}
+              navigation={{
+                goBack: closeProfilePanel,
+                navigate: (screen: string, params?: any) => { closeProfilePanel(); nav.navigate(screen as any, params); },
+              } as any}
             />
           </Animated.View>
         </>
@@ -944,16 +1018,15 @@ const styles = StyleSheet.create({
   soundRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   soundText: { fontSize: FONT.size.xs, color: 'rgba(255,255,255,0.85)', flexShrink: 1 },
 
-  rightActions: { position: 'absolute', right: 10, top: '50%', marginTop: -80, alignItems: 'center', gap: 20 },
+  rightActions: { position: 'absolute', right: 10, top: '50%', marginTop: -40, alignItems: 'center', gap: 20 },
   avatarWrap: { position: 'relative', marginBottom: 6 },
   avatarStoryRing: { padding: 2.5, borderRadius: 30, borderWidth: 2.5, borderColor: COLORS.primary },
   avatar: {
     width: 52, height: 52, borderRadius: 26,
-    borderWidth: 2, borderColor: COLORS.white,
   },
   avatarFallback: {
     width: 52, height: 52, borderRadius: 26,
-    backgroundColor: COLORS.primaryBg, borderWidth: 2, borderColor: COLORS.white,
+    backgroundColor: COLORS.primaryBg,
     alignItems: 'center', justifyContent: 'center',
   },
   avatarInitial: { fontSize: 20, fontWeight: FONT.weight.bold, color: COLORS.primary },
@@ -974,12 +1047,10 @@ const styles = StyleSheet.create({
   vinylOuter: {
     width: 48, height: 48, borderRadius: 24,
     alignItems: 'center', justifyContent: 'center',
-    borderWidth: 2.5, borderColor: 'rgba(255,255,255,0.6)',
     backgroundColor: '#111',
   },
   vinylRing: {
-    position: 'absolute', width: 44, height: 44, borderRadius: 22,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
+    display: 'none',
   },
   vinylCenter: {
     width: 28, height: 28, borderRadius: 14, overflow: 'hidden',
@@ -1026,136 +1097,33 @@ const styles = StyleSheet.create({
   },
   fullscreenText: { fontSize: 13, fontWeight: '500', color: COLORS.white },
 
+  // Custom fullscreen — content rotated 90deg to fill the portrait screen sideways
+  fsRoot: { flex: 1, backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' },
+  fsInner: { transform: [{ rotate: '90deg' }] },
+  fsCloseBtn: {
+    position: 'absolute', top: 20, left: 20, zIndex: 10,
+    width: 40, height: 40, borderRadius: 20,
+    backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center',
+  },
+  fsPlayBtn: {
+    position: 'absolute', top: '50%', left: '50%',
+    marginTop: -30, marginLeft: -30,
+    width: 60, height: 60, borderRadius: 30,
+    backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'center',
+  },
+  fsProgressTrack: {
+    position: 'absolute', bottom: 20, left: 20, right: 20,
+    height: 3, borderRadius: 99, backgroundColor: 'rgba(255,255,255,0.25)',
+  },
+  fsProgressFill: {
+    height: '100%', borderRadius: 99, backgroundColor: COLORS.white,
+  },
+
   // Profile panel
   profilePanel: {
     position: 'absolute', top: 0, right: 0, bottom: 0,
-    width: W * 0.85,
+    width: W,
     overflow: 'hidden',
   },
 });
 
-// ── UserProfilePanel ─────────────────────────────────────────────────────────
-function UserProfilePanel({ user, following, onFollow, onClose, onViewFull }: {
-  user: FeedPost['user'];
-  following: boolean;
-  onFollow: () => void;
-  onClose: () => void;
-  onViewFull: () => void;
-}) {
-  const theme = useTheme();
-
-  return (
-    <View style={[panelStyles.container, { backgroundColor: theme.surface }]}>
-      {/* Close handle */}
-      <View style={panelStyles.handleRow}>
-        <View style={[panelStyles.handle, { backgroundColor: theme.border }]} />
-        <TouchableOpacity onPress={onClose} style={panelStyles.closeBtn} activeOpacity={0.7}>
-          <IcClose size={18} color={theme.textMuted} />
-        </TouchableOpacity>
-      </View>
-
-      {/* Avatar + Identity */}
-      <View style={panelStyles.identityRow}>
-        <View style={[panelStyles.avatarWrap, { borderColor: theme.primary }]}>
-          {user.avatar_url ? (
-            <Image source={{ uri: user.avatar_url }} style={panelStyles.avatar} />
-          ) : (
-            <View style={[panelStyles.avatar, { backgroundColor: theme.primaryBg, alignItems: 'center', justifyContent: 'center' }]}>
-              <Text style={{ fontSize: 28, fontWeight: '700', color: theme.primary }}>
-                {user.display_name[0]?.toUpperCase()}
-              </Text>
-            </View>
-          )}
-          {user.is_verified && (
-            <View style={[panelStyles.verifiedBadge, { backgroundColor: theme.primary }]}>
-              <IcCheck size={9} color="#fff" strokeWidth={3} />
-            </View>
-          )}
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={[panelStyles.displayName, { color: theme.text }]} numberOfLines={1}>
-            {user.display_name}
-          </Text>
-          <Text style={[panelStyles.username, { color: theme.textMuted }]} numberOfLines={1}>
-            @{user.username}
-          </Text>
-        </View>
-      </View>
-
-      {/* Follow button */}
-      <TouchableOpacity
-        style={[panelStyles.followBtn, {
-          backgroundColor: following ? 'transparent' : theme.primary,
-          borderColor: following ? theme.border : theme.primary,
-          borderWidth: following ? 1.5 : 0,
-        }]}
-        onPress={onFollow}
-        activeOpacity={0.8}
-      >
-        <Text style={[panelStyles.followBtnText, { color: following ? theme.text : '#fff' }]}>
-          {following ? 'Abonné(e)' : 'S\'abonner'}
-        </Text>
-      </TouchableOpacity>
-
-      {/* View full profile */}
-      <TouchableOpacity style={[panelStyles.viewFullBtn, { borderColor: theme.border }]} onPress={onViewFull} activeOpacity={0.8}>
-        <IcProfile size={16} color={theme.textMuted} />
-        <Text style={[panelStyles.viewFullText, { color: theme.textMuted }]}>Voir le profil complet</Text>
-      </TouchableOpacity>
-
-      {/* Swipe hint */}
-      <Text style={[panelStyles.swipeHint, { color: theme.textSubtle }]}>
-        Glisse vers la droite pour revenir
-      </Text>
-    </View>
-  );
-}
-
-const panelStyles = StyleSheet.create({
-  container: {
-    flex: 1,
-    borderTopLeftRadius: 24, borderBottomLeftRadius: 24,
-    paddingHorizontal: 20,
-    paddingBottom: 32,
-    shadowColor: '#000', shadowOffset: { width: -4, height: 0 },
-    shadowOpacity: 0.25, shadowRadius: 16,
-    elevation: 20,
-  },
-  handleRow: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    paddingTop: 14, marginBottom: 20,
-  },
-  handle: { width: 36, height: 4, borderRadius: 2, flex: 1, maxWidth: 36 },
-  closeBtn: {
-    position: 'absolute', right: 0,
-    width: 32, height: 32, borderRadius: 16,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  identityRow: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 20 },
-  avatarWrap: {
-    width: 72, height: 72, borderRadius: 36,
-    borderWidth: 2.5, overflow: 'hidden',
-  },
-  avatar: { width: '100%', height: '100%' },
-  verifiedBadge: {
-    position: 'absolute', bottom: 2, right: 2,
-    width: 18, height: 18, borderRadius: 9,
-    alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1.5, borderColor: '#fff',
-  },
-  displayName: { fontSize: 17, fontWeight: '700', letterSpacing: -0.3 },
-  username: { fontSize: 13, marginTop: 2 },
-  followBtn: {
-    height: 44, borderRadius: 100,
-    alignItems: 'center', justifyContent: 'center',
-    marginBottom: 12,
-  },
-  followBtnText: { fontSize: 15, fontWeight: '700' },
-  viewFullBtn: {
-    height: 42, borderRadius: 100, borderWidth: 1.5,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    marginBottom: 24,
-  },
-  viewFullText: { fontSize: 14, fontWeight: '500' },
-  swipeHint: { fontSize: 11, textAlign: 'center', letterSpacing: 0.2 },
-});

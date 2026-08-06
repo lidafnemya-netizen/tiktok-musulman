@@ -98,7 +98,8 @@ export default function MessagesScreen() {
     navigation.navigate('Stories', { userId: c.other_user.id, queueUserIds: storyQueue });
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.bg, paddingTop: insets.top }]}>
+    <View style={[styles.container, { backgroundColor: theme.bg }]}>
+      <View style={{ height: insets.top, backgroundColor: theme.surface }} />
       {/* Header */}
       <View style={[styles.header, { backgroundColor: theme.surface, borderBottomColor: theme.borderLight }]}>
         <Text style={[styles.title, { color: theme.text }]}>Messages</Text>

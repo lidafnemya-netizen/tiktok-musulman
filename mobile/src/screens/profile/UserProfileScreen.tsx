@@ -176,7 +176,8 @@ export default function UserProfileScreen({ route, navigation }: Props) {
 
   if (isLoading) {
     return (
-      <View style={[styles.container, { backgroundColor: theme.bg, paddingTop: insets.top }]}>
+      <View style={[styles.container, { backgroundColor: theme.bg }]}>
+        <View style={{ height: insets.top, backgroundColor: theme.surface }} />
         {/* Skeleton header */}
         <View style={[styles.header, { backgroundColor: theme.surface, borderBottomColor: theme.borderLight }]}>
           <Skeleton width={24} height={24} borderRadius={12} />
@@ -219,13 +220,14 @@ export default function UserProfileScreen({ route, navigation }: Props) {
   const displayLoading = activeTab === 0 ? postsLoading : repostsLoading;
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.bg, paddingTop: insets.top }]}>
+    <View style={[styles.container, { backgroundColor: theme.bg }]}>
+      <View style={{ height: insets.top, backgroundColor: theme.surface }} />
       {/* Header */}
       <View style={[styles.header, { backgroundColor: theme.surface, borderBottomColor: theme.borderLight }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn} activeOpacity={0.7}>
           <IcBack size={24} color={theme.text} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: theme.text }]}>@{profile.username}</Text>
+        <Text style={[styles.headerTitle, { color: theme.text }]} numberOfLines={1}>@{profile.username}</Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
           {!isOwnProfile && profile.is_following && (
             <TouchableOpacity onPress={() => setNotifSheetOpen(true)} style={styles.backBtn} activeOpacity={0.7}>
