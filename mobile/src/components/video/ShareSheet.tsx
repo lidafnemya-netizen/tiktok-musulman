@@ -6,13 +6,15 @@ import {
 } from 'react-native';
 import { CameraRoll } from '@react-native-camera-roll/camera-roll';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useNavigation } from '@react-navigation/native';
 import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
 import { api } from '../../api/client';
+import { useAuthStore } from '../../stores/authStore';
 import { useTheme as useAppTheme } from '../../hooks/useTheme';
 import { COLORS, FONT, SPACING, RADIUS } from '../../constants/theme';
 import {
   IcClose, IcRepeat, IcFlag, IcDownload, IcLink, IcSave, IcMail, IcSearch,
-  IcInstagram, IcWhatsApp,
+  IcInstagram, IcWhatsApp, IcPin, IcTrash, IcEdit,
 } from '../ui/Icons';
 
 const { height: H } = Dimensions.get('window');
@@ -33,7 +35,9 @@ interface Post {
   video_url?: string;
   thumbnail_url?: string | null;
   media_urls?: string[];
-  user?: { display_name?: string };
+  caption?: string | null;
+  is_pinned?: boolean;
+  user?: { id?: string; display_name?: string };
 }
 
 interface Props {
@@ -46,11 +50,17 @@ interface Props {
 export default function ShareSheet({ post, visible, onClose, onNotInterested }: Props) {
   const theme = useAppTheme();
   const qc = useQueryClient();
+  const nav = useNavigation<any>();
+  const { user: currentUser } = useAuthStore();
+  const isOwnPost = !!currentUser && post.user?.id === currentUser.id;
   const slideAnim = useRef(new Animated.Value(H)).current;
   const backdropAnim = useRef(new Animated.Value(0)).current;
   const [reposted, setReposted] = useState(false);
   const [reportMode, setReportMode] = useState(false);
   const [reportText, setReportText] = useState('');
+  const [editMode, setEditMode] = useState(false);
+  const [editCaption, setEditCaption] = useState(post.caption ?? '');
+  const [pinned, setPinned] = useState(!!post.is_pinned);
   const [searchMode, setSearchMode] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -58,6 +68,9 @@ export default function ShareSheet({ post, visible, onClose, onNotInterested }: 
     if (visible) {
       setReportMode(false);
       setReportText('');
+      setEditMode(false);
+      setEditCaption(post.caption ?? '');
+      setPinned(!!post.is_pinned);
       setSearchMode(false);
       setSearchQuery('');
       Animated.parallel([
@@ -98,6 +111,53 @@ export default function ShareSheet({ post, visible, onClose, onNotInterested }: 
       onNotInterested?.();
     },
   });
+
+  const deleteMutation = useMutation({
+    mutationFn: () => api.delete(`/posts/${post.id}`).then(r => r.data),
+    onSuccess: () => {
+      ReactNativeHapticFeedback.trigger('notificationSuccess', HAPTIC);
+      qc.invalidateQueries({ queryKey: ['user-posts'] });
+      qc.invalidateQueries({ queryKey: ['user-posts-public'] });
+      onClose();
+      if (nav?.canGoBack?.()) nav.goBack();
+    },
+    onError: () => Alert.alert('Erreur', 'Impossible de supprimer cette publication.'),
+  });
+
+  const pinMutation = useMutation({
+    mutationFn: () => api.post(`/posts/${post.id}/pin`).then(r => r.data),
+    onSuccess: (data) => {
+      setPinned(data.pinned);
+      ReactNativeHapticFeedback.trigger('notificationSuccess', HAPTIC);
+      qc.invalidateQueries({ queryKey: ['user-posts'] });
+      qc.invalidateQueries({ queryKey: ['user-posts-public'] });
+    },
+    onError: (e: any) => Alert.alert('Erreur', e?.response?.data?.error ?? 'Impossible d\'épingler cette publication.'),
+  });
+
+  const editMutation = useMutation({
+    mutationFn: () => api.patch(`/posts/${post.id}`, { caption: editCaption.trim() }).then(r => r.data),
+    onSuccess: () => {
+      ReactNativeHapticFeedback.trigger('notificationSuccess', HAPTIC);
+      qc.invalidateQueries({ queryKey: ['user-posts'] });
+      qc.invalidateQueries({ queryKey: ['user-posts-public'] });
+      qc.invalidateQueries({ queryKey: ['post', post.id] });
+      setEditMode(false);
+      onClose();
+    },
+    onError: () => Alert.alert('Erreur', 'Impossible de modifier cette publication.'),
+  });
+
+  const confirmDelete = () => {
+    Alert.alert(
+      'Supprimer la publication',
+      'Cette action est définitive. La publication sera supprimée de ton profil et du fil.',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        { text: 'Supprimer', style: 'destructive', onPress: () => deleteMutation.mutate() },
+      ],
+    );
+  };
 
   const addToStoryMutation = useMutation({
     mutationFn: () => {
@@ -223,6 +283,42 @@ export default function ShareSheet({ post, visible, onClose, onNotInterested }: 
                 activeOpacity={0.8}
               >
                 <Text style={styles.reportSendText}>Envoyer le signalement</Text>
+              </TouchableOpacity>
+              <View style={{ height: 24 }} />
+            </View>
+          ) : editMode ? (
+            /* Edit sub-screen — caption (title/description/hashtags are all part of it) */
+            <View style={styles.reportPane}>
+              <View style={styles.reportHeader}>
+                <TouchableOpacity onPress={() => setEditMode(false)} activeOpacity={0.7}>
+                  <IcClose size={20} color={theme.textMuted} />
+                </TouchableOpacity>
+                <Text style={[styles.sheetTitle, { color: theme.text }]}>Modifier la publication</Text>
+                <View style={{ width: 28 }} />
+              </View>
+              <Text style={[styles.reportHint, { color: theme.textMuted }]}>
+                Titre, description et hashtags.
+              </Text>
+              <TextInput
+                style={[styles.reportInput, { borderColor: theme.borderLight, color: theme.text, backgroundColor: theme.card }]}
+                placeholder="Titre, description, #hashtags…"
+                placeholderTextColor={theme.textMuted}
+                multiline
+                value={editCaption}
+                onChangeText={setEditCaption}
+                maxLength={500}
+                autoFocus
+              />
+              <Text style={[styles.reportCount, { color: theme.textMuted }]}>{editCaption.length}/500</Text>
+              <TouchableOpacity
+                style={[styles.reportSendBtn, { backgroundColor: COLORS.primary }]}
+                onPress={() => editMutation.mutate()}
+                disabled={editMutation.isPending}
+                activeOpacity={0.8}
+              >
+                {editMutation.isPending
+                  ? <ActivityIndicator color={COLORS.white} />
+                  : <Text style={styles.reportSendText}>Enregistrer</Text>}
               </TouchableOpacity>
               <View style={{ height: 24 }} />
             </View>
@@ -356,6 +452,35 @@ export default function ShareSheet({ post, visible, onClose, onNotInterested }: 
                   theme={theme}
                 />
               </View>
+
+              {isOwnPost && (
+                <>
+                  <View style={[styles.divider, { backgroundColor: theme.borderLight }]} />
+                  <View style={styles.bottomRow4}>
+                    <ActionColumn
+                      icon={<IcPin size={21} color={pinned ? COLORS.primary : theme.text} />}
+                      label={pinned ? 'Désépingler' : 'Épingler'}
+                      onPress={() => pinMutation.mutate()}
+                      loading={pinMutation.isPending}
+                      theme={theme}
+                    />
+                    <ActionColumn
+                      icon={<IcEdit size={21} color={theme.text} />}
+                      label="Modifier"
+                      onPress={() => setEditMode(true)}
+                      theme={theme}
+                    />
+                    <ActionColumn
+                      icon={<IcTrash size={21} color={COLORS.error} />}
+                      label="Supprimer"
+                      onPress={confirmDelete}
+                      loading={deleteMutation.isPending}
+                      theme={theme}
+                      destructive
+                    />
+                  </View>
+                </>
+              )}
 
               <View style={{ height: 36 }} />
             </ScrollView>

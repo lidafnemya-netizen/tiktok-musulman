@@ -14,7 +14,7 @@ import { api, getTokens } from '../../api/client';
 import { RootStackParamList } from '../../navigation';
 import { COLORS, FONT, SPACING, RADIUS, SHADOW, API_BASE_URL } from '../../constants/theme';
 import { useTheme } from '../../hooks/useTheme';
-import { IcSettings, IcSave, IcCheck, IcHeart, IcGrid, IcEdit, IcCamera, IcChart, IcPlay, IcRepeat, IcThreads, IcEye } from '../../components/ui/Icons';
+import { IcSettings, IcSave, IcCheck, IcHeart, IcGrid, IcEdit, IcCamera, IcChart, IcPlay, IcRepeat, IcThreads, IcEye, IcPin, IcDown, IcClose, IcFollow, IcLogOut } from '../../components/ui/Icons';
 import { EditProfileScreen } from './EditProfileScreen';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -25,6 +25,8 @@ interface Post {
   video_url?: string;
   view_count: number;
   like_count: number;
+  is_pinned?: boolean;
+  __draftCell?: boolean;
 }
 
 function getThumbUrl(post: Pick<Post, 'thumbnail_url' | 'video_url'>): string | null {
@@ -63,8 +65,9 @@ type FavSubTab = typeof FAV_SUBTABS[number];
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<Nav>();
-  const { user, updateUser, loadMe } = useAuthStore();
+  const { user, updateUser, loadMe, logout } = useAuthStore();
   const theme = useTheme();
+  const [accountSheetOpen, setAccountSheetOpen] = useState(false);
 
   // Real-time stats — reload user every 15s
   useQuery({
@@ -83,13 +86,14 @@ export default function ProfileScreen() {
   const [coverLoading, setCoverLoading] = useState(false);
   const [coverError, setCoverError] = useState(false);
 
-  const { data: posts, isLoading: postsLoading, refetch: refetchPosts, isRefetching } = useQuery<{ items: Post[] }>({
+  const { data: posts, isLoading: postsLoading, refetch: refetchPosts, isRefetching } = useQuery<{ items: Post[]; draft_count?: number }>({
     queryKey: ['user-posts', user?.id],
     queryFn: () => api.get(`/posts/user/${user?.id}`).then((r) => r.data),
     enabled: !!user?.id,
     refetchOnWindowFocus: true,
     staleTime: 10_000,
   });
+  const draftCount = posts?.draft_count ?? 0;
 
   const { data: threads, isLoading: threadsLoading } = useQuery<{ items: Thread[] }>({
     queryKey: ['user-threads', user?.id],
@@ -196,6 +200,12 @@ export default function ProfileScreen() {
     : activeTab === 3 ? favorites?.items
     : null;
 
+  // Draft summary cell — first slot, own grid only, visible whenever there's at least one draft.
+  const gridDataWithDrafts: (Post & { __draftCell?: boolean })[] | null =
+    activeTab === 0 && draftCount > 0
+      ? [{ __draftCell: true } as any, ...(gridData ?? [])]
+      : (gridData as any) ?? null;
+
   const gridLoading = activeTab === 0 ? postsLoading
     : activeTab === 2 && likeSubTab === 'Pour toi' ? likedLoading
     : activeTab === 2 && likeSubTab === 'Fils' ? likedThreadsLoading
@@ -206,6 +216,63 @@ export default function ProfileScreen() {
     <View style={[styles.container, { backgroundColor: theme.bg }]}>
       <Modal visible={editVisible} animationType="slide" presentationStyle="pageSheet">
         <EditProfileScreen onClose={() => { setEditVisible(false); qc.invalidateQueries({ queryKey: ['me'] }); }} />
+      </Modal>
+
+      {/* Account switcher */}
+      <Modal visible={accountSheetOpen} transparent animationType="slide" onRequestClose={() => setAccountSheetOpen(false)}>
+        <TouchableOpacity style={styles.acctBackdrop} activeOpacity={1} onPress={() => setAccountSheetOpen(false)} />
+        <View style={[styles.acctSheet, { backgroundColor: theme.surface }]}>
+          <View style={styles.acctHandle} />
+          <View style={styles.acctHeaderRow}>
+            <Text style={[styles.acctTitle, { color: theme.text }]}>Comptes</Text>
+            <TouchableOpacity onPress={() => setAccountSheetOpen(false)} style={{ padding: 4 }}>
+              <IcClose size={20} color={theme.textMuted} />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.acctCurrentRow}>
+            {user.avatar_url
+              ? <Image source={{ uri: user.avatar_url }} style={styles.acctAvatar} />
+              : <View style={[styles.acctAvatar, { backgroundColor: theme.primaryBg, alignItems: 'center', justifyContent: 'center' }]}>
+                  <Text style={{ fontSize: 16, fontWeight: '700', color: theme.tabActive }}>{user.display_name[0]?.toUpperCase()}</Text>
+                </View>
+            }
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.acctName, { color: theme.text }]} numberOfLines={1}>{user.display_name}</Text>
+              <Text style={[styles.acctUsername, { color: theme.textMuted }]} numberOfLines={1}>@{user.username}</Text>
+            </View>
+            <IcCheck size={18} color={theme.tabActive} />
+          </View>
+
+          <TouchableOpacity
+            style={styles.acctRow}
+            activeOpacity={0.7}
+            onPress={() => {
+              setAccountSheetOpen(false);
+              Alert.alert(
+                'Ajouter un compte',
+                'Tu dois te déconnecter du compte actuel pour te connecter à un autre.',
+                [
+                  { text: 'Annuler', style: 'cancel' },
+                  { text: 'Se déconnecter', style: 'destructive', onPress: () => logout() },
+                ],
+              );
+            }}
+          >
+            <IcFollow size={18} color={theme.text} />
+            <Text style={[styles.acctRowText, { color: theme.text }]}>Ajouter ou créer un compte</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.acctRow}
+            activeOpacity={0.7}
+            onPress={() => { setAccountSheetOpen(false); logout(); }}
+          >
+            <IcLogOut size={18} color={COLORS.error} />
+            <Text style={[styles.acctRowText, { color: COLORS.error }]}>Se déconnecter</Text>
+          </TouchableOpacity>
+          <View style={{ height: 24 }} />
+        </View>
       </Modal>
 
       {/* Status-bar strip filled with header color so there's no beige seam */}
@@ -277,7 +344,14 @@ export default function ProfileScreen() {
             </TouchableOpacity>
           </View>
 
-          <Text style={[styles.displayName, { color: theme.text }]}>{user.display_name}</Text>
+          <TouchableOpacity
+            style={styles.displayNameRow}
+            onPress={() => setAccountSheetOpen(true)}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.displayName, { color: theme.text }]}>{user.display_name}</Text>
+            <IcDown size={18} color={theme.textMuted} />
+          </TouchableOpacity>
           <Text style={[styles.username, { color: theme.textMuted }]}>@{user.username}</Text>
           {user.bio ? <Text style={[styles.bio, { color: theme.textMuted }]}>{user.bio}</Text> : null}
 
@@ -397,12 +471,19 @@ export default function ProfileScreen() {
           <ActivityIndicator color={COLORS.primaryLight} style={{ marginTop: 40 }} />
         ) : (
           <FlatList
-            data={gridData ?? []}
+            data={gridDataWithDrafts ?? []}
             numColumns={3}
-            keyExtractor={(p) => p.id}
+            keyExtractor={(p, i) => p.__draftCell ? '__draft_cell__' : p.id}
             scrollEnabled={false}
             columnWrapperStyle={styles.gridRow}
-            renderItem={({ item }) => <GridItem item={item} onPress={() => navigation.navigate('VideoPlayer', { postId: item.id, userId: user?.id })} />}
+            renderItem={({ item }) => item.__draftCell ? (
+              <DraftCell
+                count={draftCount}
+                onPress={() => navigation.navigate('VideoPlayer', { postId: '', userId: user?.id, draftsOnly: true })}
+              />
+            ) : (
+              <GridItem item={item} onPress={() => navigation.navigate('VideoPlayer', { postId: item.id, userId: user?.id })} />
+            )}
             ListEmptyComponent={<EmptyTab tab={activeTab} />}
           />
         )}
@@ -459,6 +540,19 @@ function GridItem({ item, onPress, repostBadge }: { item: Post & { _repostedBy?:
           <IcRepeat size={9} color={COLORS.white} />
         </View>
       )}
+      {item.is_pinned && (
+        <View style={styles.pinBadge}>
+          <IcPin size={11} color={COLORS.white} />
+        </View>
+      )}
+    </TouchableOpacity>
+  );
+}
+
+function DraftCell({ count, onPress }: { count: number; onPress: () => void }) {
+  return (
+    <TouchableOpacity style={[styles.gridItem, styles.draftCell]} activeOpacity={0.8} onPress={onPress}>
+      <Text style={styles.draftCellCount}>Brouillons : {count}</Text>
     </TouchableOpacity>
   );
 }
@@ -587,7 +681,29 @@ const styles = StyleSheet.create({
   },
   addStoryBadgeText: { color: COLORS.white, fontSize: 16, fontWeight: FONT.weight.bold, lineHeight: 18 },
 
+  displayNameRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   displayName: { fontSize: FONT.size.xxl, fontWeight: FONT.weight.bold, color: COLORS.text, letterSpacing: -0.3 },
+
+  acctBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
+  acctSheet: {
+    borderTopLeftRadius: 20, borderTopRightRadius: 20,
+    paddingHorizontal: 20, paddingTop: 10,
+  },
+  acctHandle: { width: 36, height: 4, borderRadius: 2, backgroundColor: COLORS.border, alignSelf: 'center', marginBottom: 14 },
+  acctHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
+  acctTitle: { fontSize: FONT.size.lg, fontWeight: FONT.weight.bold },
+  acctCurrentRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    paddingVertical: 10, marginBottom: 6,
+  },
+  acctAvatar: { width: 40, height: 40, borderRadius: 20 },
+  acctName: { fontSize: FONT.size.sm, fontWeight: FONT.weight.semibold },
+  acctUsername: { fontSize: FONT.size.xs, marginTop: 1 },
+  acctRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    paddingVertical: 14, borderTopWidth: 1, borderTopColor: COLORS.borderLight,
+  },
+  acctRowText: { fontSize: FONT.size.sm, fontWeight: FONT.weight.medium },
   username: { fontSize: FONT.size.sm, color: COLORS.textMuted, marginTop: -6 },
   bio: { fontSize: FONT.size.sm, color: COLORS.textMuted, textAlign: 'center', lineHeight: 20 },
 
@@ -638,6 +754,16 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 6,
     padding: 2,
   },
+  pinBadge: {
+    position: 'absolute', top: 4, right: 4,
+    backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 6,
+    padding: 2,
+  },
+  draftCell: {
+    backgroundColor: COLORS.inputBg, alignItems: 'center', justifyContent: 'center',
+    padding: 8,
+  },
+  draftCellCount: { fontSize: FONT.size.sm, fontWeight: FONT.weight.semibold, color: COLORS.text, textAlign: 'center' },
 
   threadItem: {
     backgroundColor: COLORS.white, padding: SPACING.md,

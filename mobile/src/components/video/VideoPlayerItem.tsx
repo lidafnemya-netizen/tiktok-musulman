@@ -37,6 +37,7 @@ export interface FeedPost {
   share_count: number;
   is_liked: boolean;
   is_saved?: boolean;
+  is_pinned?: boolean;
   user: {
     id: string; username: string; display_name: string;
     avatar_url: string | null; is_verified: boolean; is_following?: boolean;
@@ -177,8 +178,14 @@ export function VideoPlayerItem({ post, isVisible, onComment, onNotInterested, i
   const panelX = useRef(new Animated.Value(W)).current;
   const panelBackdrop = useRef(new Animated.Value(0)).current;
   const [panelOpen, setPanelOpen] = useState(false);
+  // RN can send both onPanResponderRelease AND onPanResponderTerminate for the
+  // same gesture (the latter fires once the newly-pushed screen steals the
+  // responder mid-animation) — guard so the commit only ever runs once per swipe.
+  const gestureCommittedRef = useRef(false);
 
   const openProfilePanel = useCallback(() => {
+    if (gestureCommittedRef.current) return;
+    gestureCommittedRef.current = true;
     // Swipe commit → the panel (which was already following the finger) snaps
     // fully into place, then immediately hands off to the real profile screen —
     // no intermediate summary step, no extra tap required.
@@ -192,6 +199,8 @@ export function VideoPlayerItem({ post, isVisible, onComment, onNotInterested, i
   }, [panelX, panelBackdrop, nav, post.user.id, post.user.username]);
 
   const closeProfilePanel = useCallback(() => {
+    if (gestureCommittedRef.current) return;
+    gestureCommittedRef.current = true;
     Animated.parallel([
       Animated.spring(panelX, { toValue: W, useNativeDriver: true, damping: 26, stiffness: 320, mass: 0.9 }),
       Animated.timing(panelBackdrop, { toValue: 0, duration: 180, useNativeDriver: true }),
@@ -207,6 +216,7 @@ export function VideoPlayerItem({ post, isVisible, onComment, onNotInterested, i
     },
     onPanResponderGrant: () => {
       // Show panel immediately as gesture starts
+      gestureCommittedRef.current = false;
       setPanelOpen(true);
       panelX.setValue(W);
     },

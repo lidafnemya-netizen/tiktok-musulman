@@ -61,7 +61,7 @@ export type RootStackParamList = {
   ProfileViews: undefined;
   ThreadComposer: undefined;
   Sound: { soundId: string; title: string; artist?: string | null };
-  VideoPlayer: { postId: string; userId?: string };
+  VideoPlayer: { postId: string; userId?: string; draftsOnly?: boolean };
   ThreadDetail: { threadId: string };
   GoLive: undefined;
   LiveViewer: { sessionId: string; broadcasterId: string };

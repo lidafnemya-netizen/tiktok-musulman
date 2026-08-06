@@ -20,7 +20,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'VideoPlayer'>;
 const { height: SCREEN_H } = Dimensions.get('window');
 
 export default function VideoPlayerScreen({ route, navigation }: Props) {
-  const { postId, userId } = route.params;
+  const { postId, userId, draftsOnly } = route.params;
   const insets = useSafeAreaInsets();
   const [commentsPostId, setCommentsPostId] = useState<string | null>(null);
   const [activeId, setActiveId] = useState<string>(postId);
@@ -33,8 +33,8 @@ export default function VideoPlayerScreen({ route, navigation }: Props) {
   });
 
   const { data: userPosts } = useQuery<{ items: FeedPost[] }>({
-    queryKey: ['user-posts-swipe', userId],
-    queryFn: () => api.get(`/posts/user/${userId}`).then((r) => r.data),
+    queryKey: ['user-posts-swipe', userId, draftsOnly],
+    queryFn: () => api.get(`/posts/user/${userId}`, { params: draftsOnly ? { drafts_only: 1 } : undefined }).then((r) => r.data),
     enabled: !!userId,
   });
 

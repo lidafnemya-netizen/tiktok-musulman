@@ -155,6 +155,8 @@ model Post {
   is_public     Boolean    @default(true)
   visibility    PostVisibility @default(PUBLIC)
   is_thread     Boolean    @default(false)
+  is_pinned     Boolean    @default(false)
+  pinned_at     DateTime?
   sound_id      String?
   created_at    DateTime   @default(now())
   updated_at    DateTime   @updatedAt

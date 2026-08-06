@@ -17,7 +17,7 @@ import {
   Globe, Volume2, VolumeX, Moon, Sun, FileText,
   AtSign, Hash, Repeat2, ThumbsUp, Smile, Frown, Flag,
   Radio, PenLine, Maximize2, SlidersHorizontal, CornerUpLeft,
-  Download, Link, Copy, BookOpen, MessageCircleMore,
+  Download, Link, Copy, BookOpen, MessageCircleMore, Pin,
 } from 'lucide-react-native';
 import { COLORS } from '../../constants/theme';
 
@@ -111,6 +111,7 @@ export const IcMute       = mk(VolumeX);
 export const IcLogOut     = mk(LogOut);
 export const IcHelp       = mk(HelpCircle);
 export const IcTrash      = mk(Trash2);
+export const IcPin        = mk(Pin);
 export const IcStar       = mk(Star);
 export const IcAward      = mk(Award);
 export const IcZap        = mk(Zap);

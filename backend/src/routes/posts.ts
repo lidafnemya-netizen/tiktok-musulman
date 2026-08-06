@@ -405,6 +405,45 @@ export async function postRoutes(app: FastifyInstance) {
     return reply.send({ success: true });
   });
 
+  // ── EDIT (caption/visibility only, owner-only) ───────────────────────
+  const editPostSchema = z.object({
+    caption: z.string().max(500).optional(),
+    visibility: z.enum(['PUBLIC', 'FOLLOWERS', 'FRIENDS']).optional(),
+  });
+  app.patch('/:id', { preHandler: authenticate }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const parsed = editPostSchema.safeParse(req.body);
+    if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() });
+
+    const post = await prisma.post.findUnique({ where: { id }, select: { user_id: true } });
+    if (!post) return reply.status(404).send({ error: 'Not found' });
+    if (post.user_id !== req.currentUser!.id) return reply.status(403).send({ error: 'Forbidden' });
+
+    const updated = await prisma.post.update({ where: { id }, data: parsed.data });
+    return reply.send(updated);
+  });
+
+  // ── PIN / UNPIN (max 3 pinned posts, owner-only) ─────────────────────
+  app.post('/:id/pin', { preHandler: authenticate }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const userId = req.currentUser!.id;
+    const post = await prisma.post.findUnique({ where: { id }, select: { user_id: true, is_pinned: true } });
+    if (!post) return reply.status(404).send({ error: 'Not found' });
+    if (post.user_id !== userId) return reply.status(403).send({ error: 'Forbidden' });
+
+    if (post.is_pinned) {
+      await prisma.post.update({ where: { id }, data: { is_pinned: false, pinned_at: null } });
+      return reply.send({ pinned: false });
+    }
+
+    const pinnedCount = await prisma.post.count({ where: { user_id: userId, is_pinned: true } });
+    if (pinnedCount >= 3) {
+      return reply.status(400).send({ error: 'Tu ne peux épingler que 3 publications maximum.' });
+    }
+    await prisma.post.update({ where: { id }, data: { is_pinned: true, pinned_at: new Date() } });
+    return reply.send({ pinned: true });
+  });
+
   // ── LIKE / UNLIKE ───────────────────────────────────────────────────
   app.post('/:id/like', { preHandler: authenticate }, async (req, reply) => {
     const { id } = req.params as { id: string };
@@ -510,14 +549,14 @@ export async function postRoutes(app: FastifyInstance) {
   // ── USER POSTS ──────────────────────────────────────────────────────
   app.get('/user/:userId', { preHandler: authenticate }, async (req, reply) => {
     const { userId } = req.params as { userId: string };
-    const { cursor, limit = '12' } = req.query as { cursor?: string; limit?: string };
+    const { cursor, limit = '12', drafts_only } = req.query as { cursor?: string; limit?: string; drafts_only?: string };
 
     const viewerId = req.currentUser!.id;
     const isOwner = viewerId === userId;
     const postSelect = {
       id: true, thumbnail_url: true, video_url: true, media_urls: true,
       caption: true, duration: true, view_count: true, visibility: true,
-      like_count: true, comment_count: true, created_at: true, status: true,
+      like_count: true, comment_count: true, created_at: true, status: true, is_pinned: true,
       user: { select: { id: true, username: true, display_name: true, avatar_url: true, is_verified: true } },
       sound: {
         select: {
@@ -527,17 +566,37 @@ export async function postRoutes(app: FastifyInstance) {
       },
     } as const;
 
-    // Drafts are visible only to the owner, always pinned as the first slots
-    const drafts = (isOwner && !cursor)
+    // Drafts browsing mode — swipe through just the drafts (owner only)
+    if (drafts_only === '1') {
+      if (!isOwner) return reply.send({ items: [], next_cursor: null });
+      const draftItems = await prisma.post.findMany({
+        where: { user_id: userId, is_thread: false, status: 'DRAFT' },
+        orderBy: { created_at: 'desc' },
+        select: postSelect,
+      });
+      return reply.send({
+        items: draftItems.map(p => ({ ...p, is_draft: true, user: { ...p.user, is_following: false } })),
+        next_cursor: null,
+      });
+    }
+
+    const draftCount = isOwner
+      ? await prisma.post.count({ where: { user_id: userId, is_thread: false, status: 'DRAFT' } })
+      : 0;
+
+    // Pinned posts (max 3) occupy the next slots on the first page only —
+    // excluded from the regular chronological list so they don't repeat.
+    const pinned = !cursor
       ? await prisma.post.findMany({
-          where: { user_id: userId, is_thread: false, status: 'DRAFT' },
-          orderBy: { created_at: 'desc' },
+          where: { user_id: userId, is_thread: false, status: 'ACTIVE', is_pinned: true },
+          orderBy: { pinned_at: 'desc' },
+          take: 3,
           select: postSelect,
         })
       : [];
 
     const posts = await prisma.post.findMany({
-      where: { user_id: userId, is_thread: false, status: 'ACTIVE' },
+      where: { user_id: userId, is_thread: false, status: 'ACTIVE', is_pinned: false },
       take: parseInt(limit) + 1,
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
       orderBy: { created_at: 'desc' },
@@ -546,7 +605,7 @@ export async function postRoutes(app: FastifyInstance) {
 
     const hasMore = posts.length > parseInt(limit);
     const items = hasMore ? posts.slice(0, -1) : posts;
-    const allItems = [...drafts, ...items];
+    const allItems = [...pinned, ...items];
 
     const [likedIds, savedIds, isFollowing, unseenStories] = await Promise.all([
       prisma.like.findMany({ where: { user_id: viewerId, post_id: { in: allItems.map(p => p.id) } }, select: { post_id: true } }),
@@ -561,11 +620,12 @@ export async function postRoutes(app: FastifyInstance) {
     return reply.send({
       items: allItems.map(p => ({
         ...p,
-        is_draft: p.status === 'DRAFT',
+        is_draft: false,
         is_liked: likedSet.has(p.id),
         is_saved: savedSet.has(p.id),
         user: { ...p.user, is_following: isFollowing, has_unseen_story: hasUnseenStory },
       })),
+      draft_count: draftCount,
       next_cursor: hasMore ? items[items.length - 1].id : null,
     });
   });
